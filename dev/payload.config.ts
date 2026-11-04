@@ -1,10 +1,10 @@
+import { imageOptimizer } from '@inoo-ch/payload-image-optimizer'
 import { mongooseAdapter } from '@payloadcms/db-mongodb'
 import { lexicalEditor } from '@payloadcms/richtext-lexical'
 import { MongoMemoryReplSet } from 'mongodb-memory-server'
 import path from 'path'
 import { buildConfig } from 'payload'
-import { imageOptimizer } from '@inoo-ch/payload-image-optimizer'
-import sharp from 'sharp'
+import { loadEnv } from 'payload/node'
 import { fileURLToPath } from 'url'
 
 import { testEmailAdapter } from './helpers/testEmailAdapter.js'
@@ -13,12 +13,16 @@ import { seed } from './seed.js'
 const filename = fileURLToPath(import.meta.url)
 const dirname = path.dirname(filename)
 
+// Vite (unlike Next.js) doesn't load `.env` into the server environment.
+loadEnv(dirname)
+
 if (!process.env.ROOT_DIR) {
   process.env.ROOT_DIR = dirname
 }
 
 const buildConfigWithMemoryDB = async () => {
-  if (process.env.NODE_ENV === 'test') {
+  // In-memory MongoDB for tests, and for `pnpm dev` when no DATABASE_URL is set.
+  if (process.env.NODE_ENV === 'test' || !process.env.DATABASE_URL) {
     const memoryDB = await MongoMemoryReplSet.create({
       replSet: {
         count: 3,
@@ -33,30 +37,21 @@ const buildConfigWithMemoryDB = async () => {
     admin: {
       importMap: {
         baseDir: path.resolve(dirname),
+        importMapFile: path.resolve(dirname, 'app', '_payload', 'importMap.js'),
       },
     },
     collections: [
       {
         slug: 'posts',
         fields: [],
+        versions: false,
       },
       {
         slug: 'media',
+        access: { read: () => true },
         fields: [],
         upload: {
           staticDir: path.resolve(dirname, 'media'),
-          // Regression harness for the aspect-ratio srcset filter (v1.11.1).
-          // `og` and `square` are intentionally fixed-aspect variants that
-          // should be excluded from `createVariantLoader`'s srcset output
-          // when the source image does not share their aspect ratio.
-          imageSizes: [
-            { name: 'thumbnail', width: 300, height: undefined, fit: 'inside' },
-            { name: 'small', width: 600, height: undefined, fit: 'inside' },
-            { name: 'medium', width: 900, height: undefined, fit: 'inside' },
-            { name: 'large', width: 1400, height: undefined, fit: 'inside' },
-            { name: 'og', width: 1200, height: 630, fit: 'cover', position: 'center' },
-            { name: 'square', width: 500, height: 500, fit: 'cover', position: 'center' },
-          ],
         },
       },
       {
@@ -80,22 +75,36 @@ const buildConfigWithMemoryDB = async () => {
       imageOptimizer({
         clientOptimization: true,
         collections: {
-          media: true,
           avatars: {
-            maxDimensions: { width: 256, height: 256 },
             format: { format: 'webp', quality: 90 },
+            maxDimensions: { height: 256, width: 256 },
+          },
+          media: {
+            sharp: {
+              // Regression harness for the aspect-ratio srcset filter (v1.11.1).
+              // `og` and `square` are intentionally fixed-aspect variants that
+              // should be excluded from `createVariantLoader`'s srcset output
+              // when the source image does not share their aspect ratio.
+              variants: [
+                { name: 'thumbnail', fit: 'inside', height: undefined, width: 300 },
+                { name: 'small', fit: 'inside', height: undefined, width: 600 },
+                { name: 'medium', fit: 'inside', height: undefined, width: 900 },
+                { name: 'large', fit: 'inside', height: undefined, width: 1400 },
+                { name: 'og', fit: 'cover', height: 630, position: 'center', width: 1200 },
+                { name: 'square', fit: 'cover', height: 500, position: 'center', width: 500 },
+              ],
+            },
           },
         },
         format: { format: 'webp', quality: 80 },
-        maxDimensions: { width: 2560, height: 2560 },
-        stripMetadata: true,
         generateThumbHash: true,
+        maxDimensions: { height: 2560, width: 2560 },
         storeBlurDataURL: true,
+        stripMetadata: true,
         // generateFilename: uuidFilename,
       }),
     ],
     secret: process.env.PAYLOAD_SECRET || 'test-secret_key',
-    sharp,
     typescript: {
       outputFile: path.resolve(dirname, 'payload-types.ts'),
     },

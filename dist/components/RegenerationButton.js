@@ -1,7 +1,7 @@
 'use client';
 import { jsx as _jsx, jsxs as _jsxs, Fragment as _Fragment } from "react/jsx-runtime";
-import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useSelection } from '@payloadcms/ui';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { readSlugFromUrl, shouldFetchStatsForSlug } from '../utilities/regenerateSlugGuard.js';
 const POLL_INTERVAL_MS = 2000;
 // With sequential processing each image takes ~4-5s, so no progress for 30s
@@ -47,15 +47,21 @@ export const RegenerationButton = ()=>{
     const shouldFetchForSlug = useCallback((slug)=>shouldFetchStatsForSlug(slug, mountedSlugRef.current, readSlugFromUrl()), []);
     // Fetch optimization stats (independent of regeneration)
     const fetchStats = useCallback(async ()=>{
-        if (!shouldFetchForSlug(collectionSlug)) return;
+        if (!shouldFetchForSlug(collectionSlug)) {
+            return;
+        }
         try {
             const res = await fetch(`/api/image-optimizer/regenerate?collection=${collectionSlug}`);
             if (res.ok) {
                 const data = await res.json();
                 // Server says this collection isn't configured — nothing to render.
-                if (data.configured === false) return;
+                if (data.configured === false) {
+                    return;
+                }
                 setStats(data);
-                if (typeof data.allowForceAll === 'boolean') setAllowForceAll(data.allowForceAll);
+                if (typeof data.allowForceAll === 'boolean') {
+                    setAllowForceAll(data.allowForceAll);
+                }
             }
         } catch  {
         // ignore stats fetch errors
@@ -138,17 +144,25 @@ export const RegenerationButton = ()=>{
     // triggered regeneration (sessionStorage flag) and there are still pending
     // images, resume polling so the UI reconnects after page navigation.
     useEffect(()=>{
-        if (!shouldFetchForSlug(collectionSlug)) return;
+        if (!shouldFetchForSlug(collectionSlug)) {
+            return;
+        }
         let cancelled = false;
         const loadStats = async ()=>{
             try {
                 const res = await fetch(`/api/image-optimizer/regenerate?collection=${collectionSlug}`);
-                if (!res.ok || cancelled) return;
+                if (!res.ok || cancelled) {
+                    return;
+                }
                 const data = await res.json();
                 // Unconfigured collection — leave stats null, don't resume polling.
-                if (data.configured === false) return;
+                if (data.configured === false) {
+                    return;
+                }
                 setStats(data);
-                if (typeof data.allowForceAll === 'boolean') setAllowForceAll(data.allowForceAll);
+                if (typeof data.allowForceAll === 'boolean') {
+                    setAllowForceAll(data.allowForceAll);
+                }
                 // Resume polling only if the user triggered regeneration in this session
                 const wasRunning = sessionStorage.getItem(SESSION_KEY) === collectionSlug;
                 if (wasRunning && data.pending > 0) {
@@ -168,7 +182,7 @@ export const RegenerationButton = ()=>{
             // ignore
             }
         };
-        loadStats();
+        void loadStats();
         return ()=>{
             cancelled = true;
             stopPolling();
@@ -183,7 +197,7 @@ export const RegenerationButton = ()=>{
     // Refresh stats when regeneration finishes (isRunning transitions from true to false)
     useEffect(()=>{
         if (prevIsRunningRef.current && !isRunning) {
-            fetchStats();
+            void fetchStats();
         }
         prevIsRunningRef.current = isRunning;
     }, [
@@ -192,7 +206,9 @@ export const RegenerationButton = ()=>{
     ]);
     // Phase 1: Show confirmation with counts
     const handlePreflight = async ()=>{
-        if (!collectionSlug) return;
+        if (!collectionSlug) {
+            return;
+        }
         setError(null);
         // Refresh stats to get the latest counts before confirming
         await fetchStats();
@@ -202,30 +218,34 @@ export const RegenerationButton = ()=>{
         setConfirming(false);
     };
     const handleStop = async ()=>{
-        if (!collectionSlug) return;
+        if (!collectionSlug) {
+            return;
+        }
         try {
             await fetch('/api/image-optimizer/regenerate', {
-                method: 'DELETE',
+                body: JSON.stringify({
+                    collectionSlug
+                }),
                 headers: {
                     'Content-Type': 'application/json'
                 },
-                body: JSON.stringify({
-                    collectionSlug
-                })
+                method: 'DELETE'
             });
             setCancelled(true);
             setIsRunning(false);
             setStalled(false);
             stopPolling();
             sessionStorage.removeItem(SESSION_KEY);
-            fetchStats();
+            void fetchStats();
         } catch  {
         // ignore cancel errors
         }
     };
     // Phase 2: Actually start regeneration (after user confirms)
     const handleConfirm = async ()=>{
-        if (!collectionSlug) return;
+        if (!collectionSlug) {
+            return;
+        }
         setConfirming(false);
         setError(null);
         setStalled(false);
@@ -249,11 +269,11 @@ export const RegenerationButton = ()=>{
                 requestBody.docIds = getSelectedIds().map(String);
             }
             const res = await fetch('/api/image-optimizer/regenerate', {
-                method: 'POST',
+                body: JSON.stringify(requestBody),
                 headers: {
                     'Content-Type': 'application/json'
                 },
-                body: JSON.stringify(requestBody)
+                method: 'POST'
             });
             if (!res.ok) {
                 const data = await res.json();
@@ -280,7 +300,9 @@ export const RegenerationButton = ()=>{
     }, [
         stopPolling
     ]);
-    if (!collectionSlug) return null;
+    if (!collectionSlug) {
+        return null;
+    }
     // When a batch is running, compute progress relative to the queued count
     // (not the total collection) so selective regeneration shows e.g. 1/2, not 1/167.
     const batchTotal = queued ?? progress?.total ?? 0;
@@ -294,12 +316,12 @@ export const RegenerationButton = ()=>{
     const allOptimized = stats && stats.total > 0 && stats.complete === stats.total;
     return /*#__PURE__*/ _jsxs("div", {
         style: {
-            padding: '16px 24px',
+            alignItems: 'center',
             borderBottom: '1px solid #e5e7eb',
             display: 'flex',
-            alignItems: 'center',
+            flexWrap: 'wrap',
             gap: '16px',
-            flexWrap: 'wrap'
+            padding: '16px 24px'
         },
         children: [
             !confirming && !isRunning && (()=>{
@@ -309,17 +331,17 @@ export const RegenerationButton = ()=>{
                 const nothingToDo = !hasSelection && pending === 0 && !(allowForceAll && force);
                 const label = hasSelection ? `Regenerate ${selectionCount} Selected` : allowForceAll && force ? `Re-process all ${stats?.total ?? 0} images` : pending > 0 ? `Regenerate ${pending} Unoptimized` : 'All images optimized';
                 return /*#__PURE__*/ _jsx("button", {
-                    onClick: handlePreflight,
                     disabled: nothingToDo,
+                    onClick: handlePreflight,
                     style: {
                         backgroundColor: nothingToDo ? '#9ca3af' : '#4f46e5',
-                        color: '#fff',
                         border: 'none',
                         borderRadius: '6px',
-                        padding: '8px 16px',
+                        color: '#fff',
+                        cursor: nothingToDo ? 'not-allowed' : 'pointer',
                         fontSize: '14px',
                         fontWeight: 500,
-                        cursor: nothingToDo ? 'not-allowed' : 'pointer'
+                        padding: '8px 16px'
                     },
                     children: label
                 });
@@ -328,27 +350,27 @@ export const RegenerationButton = ()=>{
                 onClick: handleStop,
                 style: {
                     backgroundColor: '#ef4444',
-                    color: '#fff',
                     border: 'none',
                     borderRadius: '6px',
-                    padding: '8px 16px',
+                    color: '#fff',
+                    cursor: 'pointer',
                     fontSize: '14px',
                     fontWeight: 500,
-                    cursor: 'pointer'
+                    padding: '8px 16px'
                 },
                 children: "Stop Processing"
             }),
             confirming && stats && /*#__PURE__*/ _jsxs("div", {
                 style: {
-                    display: 'flex',
                     alignItems: 'center',
+                    display: 'flex',
                     gap: '10px'
                 },
                 children: [
                     /*#__PURE__*/ _jsx("span", {
                         style: {
-                            fontSize: '13px',
-                            color: '#374151'
+                            color: '#374151',
+                            fontSize: '13px'
                         },
                         children: hasSelection ? `Regenerate ${selectionCount} selected image${selectionCount !== 1 ? 's' : ''}?` : allowForceAll && force ? `Re-process all ${stats.total} images across the entire collection?` : `Regenerate ${stats.pending} unoptimized image${stats.pending !== 1 ? 's' : ''} across the entire collection?`
                     }),
@@ -356,13 +378,13 @@ export const RegenerationButton = ()=>{
                         onClick: handleConfirm,
                         style: {
                             backgroundColor: '#4f46e5',
-                            color: '#fff',
                             border: 'none',
                             borderRadius: '6px',
-                            padding: '6px 14px',
+                            color: '#fff',
+                            cursor: 'pointer',
                             fontSize: '13px',
                             fontWeight: 500,
-                            cursor: 'pointer'
+                            padding: '6px 14px'
                         },
                         children: "Confirm"
                     }),
@@ -370,13 +392,13 @@ export const RegenerationButton = ()=>{
                         onClick: handleCancel,
                         style: {
                             backgroundColor: 'transparent',
-                            color: '#6b7280',
                             border: '1px solid #d1d5db',
                             borderRadius: '6px',
-                            padding: '6px 14px',
+                            color: '#6b7280',
+                            cursor: 'pointer',
                             fontSize: '13px',
                             fontWeight: 500,
-                            cursor: 'pointer'
+                            padding: '6px 14px'
                         },
                         children: "Cancel"
                     })
@@ -384,17 +406,17 @@ export const RegenerationButton = ()=>{
             }),
             !confirming && allowForceAll && /*#__PURE__*/ _jsxs("label", {
                 style: {
-                    display: 'flex',
                     alignItems: 'center',
-                    gap: '6px',
-                    fontSize: '13px'
+                    display: 'flex',
+                    fontSize: '13px',
+                    gap: '6px'
                 },
                 children: [
                     /*#__PURE__*/ _jsx("input", {
-                        type: "checkbox",
                         checked: force,
+                        disabled: isRunning,
                         onChange: (e)=>setForce(e.target.checked),
-                        disabled: isRunning
+                        type: "checkbox"
                     }),
                     "Force re-process all"
                 ]
@@ -455,8 +477,8 @@ export const RegenerationButton = ()=>{
                     /*#__PURE__*/ _jsxs("div", {
                         style: {
                             display: 'flex',
-                            justifyContent: 'space-between',
                             fontSize: '12px',
+                            justifyContent: 'space-between',
                             marginBottom: '4px'
                         },
                         children: [
@@ -487,27 +509,27 @@ export const RegenerationButton = ()=>{
                     }),
                     /*#__PURE__*/ _jsxs("div", {
                         style: {
-                            height: '6px',
                             backgroundColor: '#e5e7eb',
                             borderRadius: '3px',
-                            overflow: 'hidden',
-                            display: 'flex'
+                            display: 'flex',
+                            height: '6px',
+                            overflow: 'hidden'
                         },
                         children: [
                             /*#__PURE__*/ _jsx("div", {
                                 style: {
-                                    height: '100%',
-                                    width: `${batchTotal > 0 ? Math.min(Math.round((batchProcessed - batchErrored) / batchTotal * 100), 100) : 0}%`,
                                     backgroundColor: '#10b981',
-                                    transition: 'width 0.3s ease'
+                                    height: '100%',
+                                    transition: 'width 0.3s ease',
+                                    width: `${batchTotal > 0 ? Math.min(Math.round((batchProcessed - batchErrored) / batchTotal * 100), 100) : 0}%`
                                 }
                             }),
                             batchErrored > 0 && /*#__PURE__*/ _jsx("div", {
                                 style: {
-                                    height: '100%',
-                                    width: `${batchTotal > 0 ? Math.round(batchErrored / batchTotal * 100) : 0}%`,
                                     backgroundColor: '#ef4444',
-                                    transition: 'width 0.3s ease'
+                                    height: '100%',
+                                    transition: 'width 0.3s ease',
+                                    width: `${batchTotal > 0 ? Math.round(batchErrored / batchTotal * 100) : 0}%`
                                 }
                             })
                         ]
@@ -545,20 +567,20 @@ export const RegenerationButton = ()=>{
             }),
             !isRunning && !stalled && stats && stats.total > 0 && /*#__PURE__*/ _jsxs("div", {
                 style: {
-                    marginLeft: 'auto',
+                    alignItems: 'flex-end',
                     display: 'flex',
                     flexDirection: 'column',
-                    alignItems: 'flex-end',
                     gap: '4px',
+                    marginLeft: 'auto',
                     minWidth: '180px'
                 },
                 children: [
                     /*#__PURE__*/ _jsx("div", {
                         style: {
-                            display: 'flex',
                             alignItems: 'center',
-                            gap: '8px',
-                            fontSize: '13px'
+                            display: 'flex',
+                            fontSize: '13px',
+                            gap: '8px'
                         },
                         children: allOptimized ? /*#__PURE__*/ _jsxs("span", {
                             style: {
@@ -606,19 +628,19 @@ export const RegenerationButton = ()=>{
                     }),
                     !allOptimized && /*#__PURE__*/ _jsx("div", {
                         style: {
-                            width: '100%',
-                            height: '3px',
                             backgroundColor: '#e5e7eb',
                             borderRadius: '2px',
-                            overflow: 'hidden'
+                            height: '3px',
+                            overflow: 'hidden',
+                            width: '100%'
                         },
                         children: /*#__PURE__*/ _jsx("div", {
                             style: {
-                                height: '100%',
-                                width: `${statsPercent}%`,
                                 backgroundColor: stats.errored > 0 ? '#f59e0b' : '#10b981',
                                 borderRadius: '2px',
-                                transition: 'width 0.3s ease'
+                                height: '100%',
+                                transition: 'width 0.3s ease',
+                                width: `${statsPercent}%`
                             }
                         })
                     })

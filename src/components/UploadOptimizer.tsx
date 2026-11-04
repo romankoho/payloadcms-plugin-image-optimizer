@@ -1,19 +1,19 @@
 'use client'
 
-import React, { useCallback, useEffect, useRef, useState } from 'react'
 import { Upload, useDocumentInfo, useField, useTranslation } from '@payloadcms/ui'
+import React, { useCallback, useEffect, useRef, useState } from 'react'
 
 import { resizeImage } from '../utilities/clientResize.js'
 
 export const UploadOptimizer: React.FC = () => {
   const { collectionSlug, docConfig, initialState, setUploadStatus } = useDocumentInfo()
   const uploadConfig = docConfig && 'upload' in docConfig ? docConfig.upload : undefined
-  const { value: fileValue, setValue: setFileValue } = useField<File | null>({ path: 'file' })
+  const { setValue: setFileValue, value: fileValue } = useField<File | null>({ path: 'file' })
   // Record the true pre-resize byte count so the server can report accurate
   // savings. Without this, `beforeOperation` would only see the post-canvas
   // buffer and `originalSize` would equal the browser-compressed size, making
   // the admin UI stat silently under-report the full optimization win.
-  const { setValue: setReportedOriginalSize } = useField<number | null>({
+  const { setValue: setReportedOriginalSize } = useField<null | number>({
     path: 'imageOptimizer.originalSize',
   })
   const processedFiles = useRef(new WeakSet<File>())
@@ -28,8 +28,8 @@ export const UploadOptimizer: React.FC = () => {
   }, [])
 
   useEffect(() => {
-    if (!fileValue || !(fileValue instanceof File)) return
-    if (processedFiles.current.has(fileValue)) return
+    if (!fileValue || !(fileValue instanceof File)) {return}
+    if (processedFiles.current.has(fileValue)) {return}
 
     let cancelled = false
     // Payload's SaveButton short-circuits when uploadStatus === 'uploading',
@@ -50,7 +50,7 @@ export const UploadOptimizer: React.FC = () => {
 
     handleResize(fileValue)
       .then((resized) => {
-        if (cancelled) return
+        if (cancelled) {return}
         processedFiles.current.add(resized)
         if (resized !== fileValue) {
           setFileValue(resized)
@@ -62,7 +62,7 @@ export const UploadOptimizer: React.FC = () => {
         // original through" rather than leaving Save blocked forever.
       })
       .finally(() => {
-        if (cancelled) return
+        if (cancelled) {return}
         setOptimizing(false)
         setUploadStatus?.('idle')
       })
@@ -74,7 +74,7 @@ export const UploadOptimizer: React.FC = () => {
     }
   }, [fileValue, handleResize, setFileValue, setReportedOriginalSize, setUploadStatus])
 
-  if (!collectionSlug || !uploadConfig) return null
+  if (!collectionSlug || !uploadConfig) {return null}
 
   return (
     <>
@@ -85,26 +85,26 @@ export const UploadOptimizer: React.FC = () => {
       />
       {optimizing && (
         <div
-          style={{
-            fontSize: 12,
-            color: '#6b7280',
-            marginTop: 6,
-            display: 'flex',
-            alignItems: 'center',
-            gap: 6,
-          }}
-          role="status"
           aria-live="polite"
+          role="status"
+          style={{
+            alignItems: 'center',
+            color: '#6b7280',
+            display: 'flex',
+            fontSize: 12,
+            gap: 6,
+            marginTop: 6,
+          }}
         >
           <span
             style={{
-              display: 'inline-block',
-              width: 10,
-              height: 10,
-              border: '2px solid #d1d5db',
-              borderTopColor: '#4f46e5',
-              borderRadius: '50%',
               animation: 'imageOptimizerSpin 0.8s linear infinite',
+              border: '2px solid #d1d5db',
+              borderRadius: '50%',
+              borderTopColor: '#4f46e5',
+              display: 'inline-block',
+              height: 10,
+              width: 10,
             }}
           />
           {optimizingLabel}

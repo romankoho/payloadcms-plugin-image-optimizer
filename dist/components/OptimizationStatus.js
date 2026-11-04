@@ -1,10 +1,12 @@
 'use client';
 import { jsx as _jsx, jsxs as _jsxs } from "react/jsx-runtime";
+import { useAllFormFields, useDocumentInfo } from '@payloadcms/ui';
 import React from 'react';
 import { thumbHashToDataURL } from 'thumbhash';
-import { useAllFormFields, useDocumentInfo } from '@payloadcms/ui';
 const formatBytes = (bytes)=>{
-    if (bytes === 0) return '0 B';
+    if (bytes === 0) {
+        return '0 B';
+    }
     const k = 1024;
     const sizes = [
         'B',
@@ -22,7 +24,7 @@ const statusColors = {
 const POLL_INTERVAL_MS = 2000;
 export const OptimizationStatus = (props)=>{
     const [formState] = useAllFormFields();
-    const { collectionSlug, id } = useDocumentInfo();
+    const { id, collectionSlug } = useDocumentInfo();
     const basePath = props.path ?? 'imageOptimizer';
     const formStatus = formState[`${basePath}.status`]?.value;
     const formOriginalSize = formState[`${basePath}.originalSize`]?.value;
@@ -40,24 +42,32 @@ export const OptimizationStatus = (props)=>{
     // flight. beforeChange now always resolves status to 'complete' or 'error'
     // synchronously, so there's no "non-terminal" state to poll for on upload.
     React.useEffect(()=>{
-        if (!regenerating) return;
-        if (!collectionSlug || !id) return;
+        if (!regenerating) {
+            return;
+        }
+        if (!collectionSlug || !id) {
+            return;
+        }
         const controller = new AbortController();
         const poll = async ()=>{
             try {
                 const res = await fetch(`/api/${collectionSlug}/${id}?depth=0`, {
                     signal: controller.signal
                 });
-                if (!res.ok) return;
+                if (!res.ok) {
+                    return;
+                }
                 const doc = await res.json();
                 const optimizer = doc.imageOptimizer;
-                if (!optimizer) return;
+                if (!optimizer) {
+                    return;
+                }
                 setPolledData({
-                    status: optimizer.status,
-                    originalSize: optimizer.originalSize,
+                    error: optimizer.error,
                     optimizedSize: optimizer.optimizedSize,
-                    thumbHash: optimizer.thumbHash,
-                    error: optimizer.error
+                    originalSize: optimizer.originalSize,
+                    status: optimizer.status,
+                    thumbHash: optimizer.thumbHash
                 });
                 // If a user-initiated regeneration wrote a new revision (updatedAt
                 // advanced) and status is terminal, we're done.
@@ -72,7 +82,7 @@ export const OptimizationStatus = (props)=>{
         };
         const intervalId = setInterval(poll, POLL_INTERVAL_MS);
         // Run immediately on mount
-        poll();
+        void poll();
         return ()=>{
             controller.abort();
             clearInterval(intervalId);
@@ -89,7 +99,9 @@ export const OptimizationStatus = (props)=>{
     const thumbHash = polledData?.thumbHash ?? formThumbHash;
     const error = polledData?.error ?? formError;
     const thumbHashUrl = React.useMemo(()=>{
-        if (!thumbHash) return null;
+        if (!thumbHash) {
+            return null;
+        }
         try {
             const bytes = Uint8Array.from(atob(thumbHash), (c)=>c.charCodeAt(0));
             return thumbHashToDataURL(bytes);
@@ -100,7 +112,9 @@ export const OptimizationStatus = (props)=>{
         thumbHash
     ]);
     const handleRegenerate = React.useCallback(async ()=>{
-        if (!collectionSlug || !id || regenerating) return;
+        if (!collectionSlug || !id || regenerating) {
+            return;
+        }
         setRegenError(null);
         try {
             // Snapshot updatedAt so the poll loop can detect the re-write.
@@ -113,16 +127,16 @@ export const OptimizationStatus = (props)=>{
             // during the network round-trip, not just while the job actually runs.
             setRegenerating(true);
             const res = await fetch('/api/image-optimizer/regenerate', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json'
-                },
                 body: JSON.stringify({
                     collectionSlug,
                     docIds: [
                         String(id)
                     ]
-                })
+                }),
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                method: 'POST'
             });
             if (!res.ok) {
                 const data = await res.json().catch(()=>({}));
@@ -238,27 +252,27 @@ export const OptimizationStatus = (props)=>{
             }),
             collectionSlug && id != null && /*#__PURE__*/ _jsxs("div", {
                 style: {
-                    marginTop: '12px',
                     display: 'flex',
                     flexDirection: 'column',
-                    gap: '4px'
+                    gap: '4px',
+                    marginTop: '12px'
                 },
                 children: [
                     /*#__PURE__*/ _jsx("button", {
-                        type: "button",
-                        onClick: handleRegenerate,
                         disabled: regenerating,
+                        onClick: handleRegenerate,
                         style: {
                             alignSelf: 'flex-start',
                             backgroundColor: regenerating ? '#9ca3af' : '#4f46e5',
-                            color: '#fff',
                             border: 'none',
                             borderRadius: '6px',
-                            padding: '6px 12px',
+                            color: '#fff',
+                            cursor: regenerating ? 'wait' : 'pointer',
                             fontSize: '12px',
                             fontWeight: 500,
-                            cursor: regenerating ? 'wait' : 'pointer'
+                            padding: '6px 12px'
                         },
+                        type: "button",
                         children: regenerating ? status ? 'Regenerating…' : 'Optimizing…' : status ? 'Regenerate this image' : 'Optimize this image'
                     }),
                     regenError && /*#__PURE__*/ _jsx("span", {

@@ -1,11 +1,11 @@
 'use client'
 
+import { useAllFormFields, useDocumentInfo } from '@payloadcms/ui'
 import React from 'react'
 import { thumbHashToDataURL } from 'thumbhash'
-import { useAllFormFields, useDocumentInfo } from '@payloadcms/ui'
 
 const formatBytes = (bytes: number): string => {
-  if (bytes === 0) return '0 B'
+  if (bytes === 0) {return '0 B'}
   const k = 1024
   const sizes = ['B', 'KB', 'MB', 'GB']
   const i = Math.floor(Math.log(bytes) / Math.log(k))
@@ -20,16 +20,16 @@ const statusColors: Record<string, string> = {
 const POLL_INTERVAL_MS = 2000
 
 type PolledData = {
-  status?: string
-  originalSize?: number
-  optimizedSize?: number
-  thumbHash?: string
   error?: string
+  optimizedSize?: number
+  originalSize?: number
+  status?: string
+  thumbHash?: string
 }
 
 export const OptimizationStatus: React.FC<{ path?: string }> = (props) => {
   const [formState] = useAllFormFields()
-  const { collectionSlug, id } = useDocumentInfo()
+  const { id, collectionSlug } = useDocumentInfo()
   const basePath = props.path ?? 'imageOptimizer'
 
   const formStatus = formState[`${basePath}.status`]?.value as string | undefined
@@ -38,20 +38,20 @@ export const OptimizationStatus: React.FC<{ path?: string }> = (props) => {
   const formThumbHash = formState[`${basePath}.thumbHash`]?.value as string | undefined
   const formError = formState[`${basePath}.error`]?.value as string | undefined
 
-  const [polledData, setPolledData] = React.useState<PolledData | null>(null)
+  const [polledData, setPolledData] = React.useState<null | PolledData>(null)
   const [regenerating, setRegenerating] = React.useState(false)
-  const [regenError, setRegenError] = React.useState<string | null>(null)
+  const [regenError, setRegenError] = React.useState<null | string>(null)
   // updatedAt snapshot captured before POSTing a regenerate so we can detect
   // the doc has been re-written (status stays 'complete' throughout, so we
   // can't rely on a status transition to signal completion).
-  const regenerateStartRef = React.useRef<string | null>(null)
+  const regenerateStartRef = React.useRef<null | string>(null)
 
   // Poll for status updates only while a regeneration we initiated is in
   // flight. beforeChange now always resolves status to 'complete' or 'error'
   // synchronously, so there's no "non-terminal" state to poll for on upload.
   React.useEffect(() => {
-    if (!regenerating) return
-    if (!collectionSlug || !id) return
+    if (!regenerating) {return}
+    if (!collectionSlug || !id) {return}
 
     const controller = new AbortController()
 
@@ -60,17 +60,17 @@ export const OptimizationStatus: React.FC<{ path?: string }> = (props) => {
         const res = await fetch(`/api/${collectionSlug}/${id}?depth=0`, {
           signal: controller.signal,
         })
-        if (!res.ok) return
+        if (!res.ok) {return}
         const doc = await res.json()
         const optimizer = doc.imageOptimizer
-        if (!optimizer) return
+        if (!optimizer) {return}
 
         setPolledData({
-          status: optimizer.status,
-          originalSize: optimizer.originalSize,
-          optimizedSize: optimizer.optimizedSize,
-          thumbHash: optimizer.thumbHash,
           error: optimizer.error,
+          optimizedSize: optimizer.optimizedSize,
+          originalSize: optimizer.originalSize,
+          status: optimizer.status,
+          thumbHash: optimizer.thumbHash,
         })
 
         // If a user-initiated regeneration wrote a new revision (updatedAt
@@ -93,7 +93,7 @@ export const OptimizationStatus: React.FC<{ path?: string }> = (props) => {
 
     const intervalId = setInterval(poll, POLL_INTERVAL_MS)
     // Run immediately on mount
-    poll()
+    void poll()
 
     return () => {
       controller.abort()
@@ -109,7 +109,7 @@ export const OptimizationStatus: React.FC<{ path?: string }> = (props) => {
   const error = polledData?.error ?? formError
 
   const thumbHashUrl = React.useMemo(() => {
-    if (!thumbHash) return null
+    if (!thumbHash) {return null}
     try {
       const bytes = Uint8Array.from(atob(thumbHash), c => c.charCodeAt(0))
       return thumbHashToDataURL(bytes)
@@ -119,7 +119,7 @@ export const OptimizationStatus: React.FC<{ path?: string }> = (props) => {
   }, [thumbHash])
 
   const handleRegenerate = React.useCallback(async () => {
-    if (!collectionSlug || !id || regenerating) return
+    if (!collectionSlug || !id || regenerating) {return}
     setRegenError(null)
     try {
       // Snapshot updatedAt so the poll loop can detect the re-write.
@@ -134,9 +134,9 @@ export const OptimizationStatus: React.FC<{ path?: string }> = (props) => {
       setRegenerating(true)
 
       const res = await fetch('/api/image-optimizer/regenerate', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ collectionSlug, docIds: [String(id)] }),
+        headers: { 'Content-Type': 'application/json' },
+        method: 'POST',
       })
       if (!res.ok) {
         const data = await res.json().catch(() => ({}))
@@ -207,22 +207,22 @@ export const OptimizationStatus: React.FC<{ path?: string }> = (props) => {
       )}
 
       {collectionSlug && id != null && (
-        <div style={{ marginTop: '12px', display: 'flex', flexDirection: 'column', gap: '4px' }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', marginTop: '12px' }}>
           <button
-            type="button"
-            onClick={handleRegenerate}
             disabled={regenerating}
+            onClick={handleRegenerate}
             style={{
               alignSelf: 'flex-start',
               backgroundColor: regenerating ? '#9ca3af' : '#4f46e5',
-              color: '#fff',
               border: 'none',
               borderRadius: '6px',
-              padding: '6px 12px',
+              color: '#fff',
+              cursor: regenerating ? 'wait' : 'pointer',
               fontSize: '12px',
               fontWeight: 500,
-              cursor: regenerating ? 'wait' : 'pointer',
+              padding: '6px 12px',
             }}
+            type="button"
           >
             {regenerating
               ? (status ? 'Regenerating…' : 'Optimizing…')

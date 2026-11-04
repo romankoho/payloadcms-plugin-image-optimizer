@@ -1,23 +1,25 @@
-import path from 'path'
-import sharp from 'sharp'
 import type { CollectionBeforeChangeHook } from 'payload'
 
+import sharp from 'sharp'
+
 import type { ResolvedImageOptimizerConfig } from '../types.js'
+
 import { generateThumbHash } from '../processing/index.js'
 import { decodeThumbHashToDataURL } from '../utilities/thumbhash.js'
 
 /**
  * Config-injection architecture.
  *
- * Payload's native `generateFileData()` pipeline (driven by
- * `upload.formatOptions`, `upload.resizeOptions`, `upload.withMetadata`, and
- * per-size `imageSize.formatOptions` injected at plugin init) handles all the
- * actual image work — resize, format conversion, EXIF strip — before this hook
- * runs. By this point `req.file.data` is the optimized buffer Payload will
- * persist to disk / cloud storage.
+ * Payload's native `generateFileData()` pipeline (driven by the
+ * `sharpTransformer` the plugin registers with `formatOptions`,
+ * `resizeOptions`, `withMetadata`, and per-variant `formatOptions`) handles
+ * all the actual image work — resize, format conversion, EXIF strip — before
+ * this hook runs. By this point `req.file.data` is the optimized buffer Payload
+ * will persist to disk / cloud storage.
+ *
+ * The filename strategy runs earlier, in `beforeOperation`.
  *
  * This hook only owns:
- *   • the optional filename strategy (seoFilename, uuidFilename, custom)
  *   • the early-bail when Payload is re-fetching its own file for a focal-point
  *     adjustment (no need to re-stamp anything)
  *   • the imageOptimizer status field (originalSize, optimizedSize, status,
@@ -27,16 +29,16 @@ import { decodeThumbHashToDataURL } from '../utilities/thumbhash.js'
  */
 export const createBeforeChangeHook = (
   resolvedConfig: ResolvedImageOptimizerConfig,
-  collectionSlug: string,
+  _collectionSlug: string,
 ): CollectionBeforeChangeHook => {
   return async ({ context, data, originalDoc, req }) => {
-    if (context?.imageOptimizer_skip) return data
+    if (context?.imageOptimizer_skip) {return data}
 
-    if (!req.file || !req.file.data || !req.file.mimetype?.startsWith('image/')) return data
+    if (!req.file || !req.file.data || !req.file.mimetype?.startsWith('image/')) {return data}
 
     // Guard: zero-byte buffer. Sharp throws on decode; let Payload handle the
     // empty file at its own layer rather than corrupting a bogus status record.
-    if (req.file.data.length === 0) return data
+    if (req.file.data.length === 0) {return data}
 
     // Resolve the true original size before any guard short-circuits, so SVG,
     // animated-GIF, and normal paths all report the same stat. Priority:
@@ -67,10 +69,10 @@ export const createBeforeChangeHook = (
     // still letting Payload persist the original file untouched.
     if (req.file.mimetype === 'image/svg+xml') {
       data.imageOptimizer = {
-        originalSize,
-        optimizedSize: req.file.data.length,
-        status: 'complete',
         error: null,
+        optimizedSize: req.file.data.length,
+        originalSize,
+        status: 'complete',
       }
       return data
     }
@@ -84,10 +86,10 @@ export const createBeforeChangeHook = (
         const metadata = await sharp(req.file.data, { pages: -1 }).metadata()
         if (typeof metadata.pages === 'number' && metadata.pages > 1) {
           data.imageOptimizer = {
-            originalSize,
-            optimizedSize: req.file.data.length,
-            status: 'complete',
             error: null,
+            optimizedSize: req.file.data.length,
+            originalSize,
+            status: 'complete',
           }
           return data
         }
@@ -120,30 +122,6 @@ export const createBeforeChangeHook = (
       }
     }
 
-    // Apply custom filename strategy (seoFilename, uuidFilename, or user-provided).
-    // The callback returns a stem (no extension) — we append the extension Payload
-    // will give the file (the post-formatOptions extension is reflected in
-    // data.filename by the time the field hooks run, but at this point we still
-    // see the original upload extension on req.file.name; data.filename has the
-    // post-pipeline extension when generateFileData has produced one).
-    if (resolvedConfig.generateFilename) {
-      const existingFilename = (originalDoc as Record<string, unknown> | undefined)?.filename as string | undefined
-      // Prefer data.filename (set by generateFileData with the converted extension)
-      // over req.file.name (the original upload extension). Falls back to req.file.name.
-      const sourceForExt = (data as Record<string, unknown>).filename as string | undefined ?? req.file.name
-      const ext = path.extname(sourceForExt)
-      const stem = resolvedConfig.generateFilename({
-        altText: (data as Record<string, unknown>).alt as string | undefined,
-        originalFilename: req.file.name,
-        mimeType: req.file.mimetype,
-        collectionSlug,
-        existingFilename,
-      })
-      const newFilename = `${stem}${ext}`
-      req.file.name = newFilename
-      data.filename = newFilename
-    }
-
     // Optimized size: req.file.data here is the post-resize/format buffer that
     // Payload will write. data.filesize was also populated by generateFileData
     // and is the same value, but req.file.data.length is the source of truth.
@@ -151,10 +129,10 @@ export const createBeforeChangeHook = (
     const optimizedSize = req.file.data.length
 
     data.imageOptimizer = {
-      originalSize,
-      optimizedSize,
-      status: 'complete',
       error: null,
+      optimizedSize,
+      originalSize,
+      status: 'complete',
     }
 
     // Compute ThumbHash inline so it lands in the initial DB write (avoids a

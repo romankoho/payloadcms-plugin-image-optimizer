@@ -5,6 +5,7 @@ import type { MediaResource } from '../src/types.js'
 import {
   createVariantLoader,
   findBestVariant,
+  getResponsiveImageProps,
   getValidVariants,
 } from '../src/utilities/responsiveImage.js'
 
@@ -15,17 +16,17 @@ import {
  * produced a head-cropped render on `/ueber-uns`.
  */
 const portraitMedia: MediaResource = {
-  url: '/media/pascal.jpg',
-  width: 1700,
   height: 1365,
-  sizes: {
-    thumbnail: { url: '/media/pascal-300.jpg', width: 300, height: 241 },
-    small: { url: '/media/pascal-600.jpg', width: 600, height: 482 },
-    medium: { url: '/media/pascal-900.jpg', width: 900, height: 723 },
-    large: { url: '/media/pascal-1400.jpg', width: 1400, height: 1124 },
-    og: { url: '/media/pascal-og.jpg', width: 1200, height: 630 },
-    square: { url: '/media/pascal-square.jpg', width: 500, height: 500 },
+  url: '/media/pascal.jpg',
+  variants: {
+    large: { height: 1124, url: '/media/pascal-1400.jpg', width: 1400 },
+    medium: { height: 723, url: '/media/pascal-900.jpg', width: 900 },
+    og: { height: 630, url: '/media/pascal-og.jpg', width: 1200 },
+    small: { height: 482, url: '/media/pascal-600.jpg', width: 600 },
+    square: { height: 500, url: '/media/pascal-square.jpg', width: 500 },
+    thumbnail: { height: 241, url: '/media/pascal-300.jpg', width: 300 },
   },
+  width: 1700,
 }
 
 describe('getValidVariants', () => {
@@ -46,8 +47,8 @@ describe('getValidVariants', () => {
   test('keeps variants when source dimensions are missing (graceful degradation)', () => {
     const variants = getValidVariants({
       ...portraitMedia,
-      width: null,
       height: null,
+      width: null,
     })
 
     expect(variants.map((v) => v.url)).toContain('/media/pascal-og.jpg')
@@ -56,12 +57,12 @@ describe('getValidVariants', () => {
 
   test('keeps variants whose height is missing (cannot compute aspect)', () => {
     const variants = getValidVariants({
-      url: '/media/x.jpg',
-      width: 1000,
       height: 800,
-      sizes: {
+      url: '/media/x.jpg',
+      variants: {
         legacy: { url: '/media/x-legacy.jpg', width: 500 },
       },
+      width: 1000,
     })
 
     expect(variants.map((v) => v.url)).toContain('/media/x-legacy.jpg')
@@ -70,31 +71,31 @@ describe('getValidVariants', () => {
   test('tolerates sub-pixel rounding drift from sharp', () => {
     // 1700×1365 → 1.2454, 1400×1124 → 1.2456. Drift ~0.02%, well under 3%.
     const variants = getValidVariants({
-      url: '/media/x.jpg',
-      width: 1700,
       height: 1365,
-      sizes: {
-        large: { url: '/media/x-1400.jpg', width: 1400, height: 1124 },
+      url: '/media/x.jpg',
+      variants: {
+        large: { height: 1124, url: '/media/x-1400.jpg', width: 1400 },
       },
+      width: 1700,
     })
 
     expect(variants).toHaveLength(1)
   })
 
-  test('returns [] when media has no sizes', () => {
-    expect(getValidVariants({ url: '/media/x.jpg', width: 100, height: 100 })).toEqual([])
+  test('returns [] when media has no variants', () => {
+    expect(getValidVariants({ height: 100, url: '/media/x.jpg', width: 100 })).toEqual([])
   })
 
   test('skips variants missing url or width', () => {
     const variants = getValidVariants({
-      url: '/media/x.jpg',
-      width: 1000,
       height: 1000,
-      sizes: {
-        noUrl: { width: 500, height: 500 },
-        noWidth: { url: '/media/y.jpg', height: 500 },
-        valid: { url: '/media/z.jpg', width: 500, height: 500 },
+      url: '/media/x.jpg',
+      variants: {
+        noUrl: { height: 500, width: 500 },
+        noWidth: { height: 500, url: '/media/y.jpg' },
+        valid: { height: 500, url: '/media/z.jpg', width: 500 },
       },
+      width: 1000,
     })
 
     expect(variants.map((v) => v.url)).toEqual(['/media/z.jpg'])
@@ -148,7 +149,7 @@ describe('createVariantLoader', () => {
   test('falls back to /_next/image when no aspect-matched variant covers the width', () => {
     const loader = createVariantLoader(portraitMedia)!
     // 3840 is far above the largest matched variant (1400); 1400/3840 = 0.36 < 0.8.
-    const url = loader({ src: '/media/pascal.jpg', width: 3840, quality: 75 })
+    const url = loader({ quality: 75, src: '/media/pascal.jpg', width: 3840 })
 
     expect(url).toMatch(/^\/_next\/image\?/)
     expect(url).toContain('w=3840')
@@ -170,7 +171,7 @@ describe('createVariantLoader', () => {
 
   test('falls back to /_next/image and passes through a non-default explicit quality', () => {
     const loader = createVariantLoader(portraitMedia)!
-    const url = loader({ src: '/media/pascal.jpg', width: 3840, quality: 90 })
+    const url = loader({ quality: 90, src: '/media/pascal.jpg', width: 3840 })
 
     expect(url).toContain('q=90')
     expect(url).not.toContain('q=80')
@@ -181,15 +182,15 @@ describe('createVariantLoader', () => {
     // is already in the variant, so /_next/image would just round-trip the
     // same bytes through a server hop. Direct blob URL is strictly better.
     const saturatedMedia: MediaResource = {
-      url: '/media/saturated.jpg',
-      width: 1400,
       height: 1124,
-      sizes: {
-        thumbnail: { url: '/media/saturated-300.jpg', width: 300, height: 241 },
-        small: { url: '/media/saturated-600.jpg', width: 600, height: 482 },
-        medium: { url: '/media/saturated-900.jpg', width: 900, height: 723 },
-        large: { url: '/media/saturated-1400.jpg', width: 1400, height: 1124 },
+      url: '/media/saturated.jpg',
+      variants: {
+        large: { height: 1124, url: '/media/saturated-1400.jpg', width: 1400 },
+        medium: { height: 723, url: '/media/saturated-900.jpg', width: 900 },
+        small: { height: 482, url: '/media/saturated-600.jpg', width: 600 },
+        thumbnail: { height: 241, url: '/media/saturated-300.jpg', width: 300 },
       },
+      width: 1400,
     }
     const loader = createVariantLoader(saturatedMedia)!
     const url = loader({ src: '/media/saturated.jpg', width: 3840 })
@@ -203,12 +204,12 @@ describe('createVariantLoader', () => {
     // parent file has more detail than our largest variant, so /_next/image
     // can legitimately deliver a higher-resolution render.
     const wideMedia: MediaResource = {
-      url: '/media/wide.jpg',
-      width: 2560,
       height: 2055,
-      sizes: {
-        large: { url: '/media/wide-1400.jpg', width: 1400, height: 1124 },
+      url: '/media/wide.jpg',
+      variants: {
+        large: { height: 1124, url: '/media/wide-1400.jpg', width: 1400 },
       },
+      width: 2560,
     }
     const loader = createVariantLoader(wideMedia)!
     const url = loader({ src: '/media/wide.jpg', width: 3840 })
@@ -222,8 +223,8 @@ describe('createVariantLoader', () => {
     // back to /_next/image rather than guess.
     const unknownDimsMedia: MediaResource = {
       url: '/media/unknown.jpg',
-      sizes: {
-        large: { url: '/media/unknown-1400.jpg', width: 1400, height: 1124 },
+      variants: {
+        large: { height: 1124, url: '/media/unknown-1400.jpg', width: 1400 },
       },
     }
     const loader = createVariantLoader(unknownDimsMedia)!
@@ -234,13 +235,13 @@ describe('createVariantLoader', () => {
 
   test('saturation path still applies the updatedAt cache-buster', () => {
     const saturatedMedia: MediaResource = {
-      url: '/media/saturated.jpg',
-      width: 1400,
       height: 1124,
       updatedAt: '2026-04-26T10:00:00.000Z',
-      sizes: {
-        large: { url: '/media/saturated-1400.jpg', width: 1400, height: 1124 },
+      url: '/media/saturated.jpg',
+      variants: {
+        large: { height: 1124, url: '/media/saturated-1400.jpg', width: 1400 },
       },
+      width: 1400,
     }
     const loader = createVariantLoader(saturatedMedia)!
     const url = loader({ src: '/media/saturated.jpg', width: 3840 })
@@ -249,7 +250,7 @@ describe('createVariantLoader', () => {
   })
 
   test('returns undefined when media has no usable variants', () => {
-    expect(createVariantLoader({ url: '/x.jpg', width: 100, height: 100 })).toBeUndefined()
+    expect(createVariantLoader({ height: 100, url: '/x.jpg', width: 100 })).toBeUndefined()
   })
 
   test('appends updatedAt as url-encoded cache-buster on variant urls', () => {
@@ -293,15 +294,15 @@ describe('createVariantLoader', () => {
     // detect an existing `?` and switch to `&`.
     const loader = createVariantLoader({
       ...portraitMedia,
-      sizes: {
-        ...portraitMedia.sizes,
+      updatedAt: '2026-04-20T10:45:30.123Z',
+      variants: {
+        ...portraitMedia.variants,
         small: {
+          height: 482,
           url: '/media/pascal-600.jpg?sig=abc123',
           width: 600,
-          height: 482,
         },
       },
-      updatedAt: '2026-04-20T10:45:30.123Z',
     })!
 
     const url = loader({ src: '/media/pascal.jpg', width: 600 })
@@ -322,5 +323,29 @@ describe('createVariantLoader', () => {
     expect(url).toMatch(/^\/media\/pascal-600\.jpg\?v=/)
     expect(url).not.toContain(' ')
     expect(url).not.toMatch(/\?v=[^&]*:/)
+  })
+})
+
+describe('getResponsiveImageProps (framework-agnostic <img>)', () => {
+  test('builds a width-descriptor srcSet from aspect-matched variants and appends the wider main file', () => {
+    const props = getResponsiveImageProps({
+      height: 1500,
+      updatedAt: '2026-01-01',
+      url: '/api/media/file/a.webp',
+      variants: {
+        og: { height: 630, url: '/api/media/file/a-og.webp', width: 1200 },
+        small: { height: 450, url: '/api/media/file/a-600.webp', width: 600 },
+      },
+      width: 2000,
+    })
+    expect(props.src).toBe('/api/media/file/a.webp?v=2026-01-01')
+    expect(props.srcSet).toBe(
+      '/api/media/file/a-600.webp?v=2026-01-01 600w, /api/media/file/a.webp?v=2026-01-01 2000w',
+    )
+    expect(props).toMatchObject({ height: 1500, width: 2000 })
+  })
+
+  test('no variants: no srcSet', () => {
+    expect(getResponsiveImageProps({ url: '/a.png', width: 100 }).srcSet).toBeUndefined()
   })
 })

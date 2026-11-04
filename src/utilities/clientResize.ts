@@ -15,17 +15,17 @@ const DEFAULT_MAX_HEIGHT = 2560
 const DEFAULT_JPEG_QUALITY = 0.85
 
 const RESIZABLE_TYPES = new Set([
+  'image/bmp',
   'image/jpeg',
   'image/png',
-  'image/webp',
-  'image/bmp',
   'image/tiff',
+  'image/webp',
 ])
 
 export type ResizeOptions = {
-  maxWidth?: number
-  maxHeight?: number
   jpegQuality?: number
+  maxHeight?: number
+  maxWidth?: number
 }
 
 /**
@@ -48,7 +48,7 @@ function hasAlpha(
     const { data } = img
     // data is RGBA quads; stride 4 * 8 = 32 to skip 8 pixels at a time.
     for (let i = 3; i < data.length; i += 32) {
-      if (data[i]! < 255) return true
+      if (data[i] < 255) {return true}
     }
     return false
   } catch {
@@ -64,7 +64,7 @@ export async function resizeImage(
   const maxHeight = options.maxHeight ?? DEFAULT_MAX_HEIGHT
   const jpegQuality = options.jpegQuality ?? DEFAULT_JPEG_QUALITY
 
-  if (!RESIZABLE_TYPES.has(file.type)) return file
+  if (!RESIZABLE_TYPES.has(file.type)) {return file}
 
   let bitmap: ImageBitmap
   try {
@@ -75,7 +75,7 @@ export async function resizeImage(
     return file
   }
 
-  const { width, height } = bitmap
+  const { height, width } = bitmap
 
   if (width <= maxWidth && height <= maxHeight) {
     bitmap.close()
@@ -122,7 +122,7 @@ export async function resizeImage(
   // canvas.toBlob resolves null under memory pressure or security
   // restrictions (iOS Safari in some contexts). Return the original so we
   // never produce a File backed by garbage data.
-  if (!blob || blob.size === 0) return file
+  if (!blob || blob.size === 0) {return file}
 
   const baseName = file.name.replace(/\.[^.]+$/, '')
   return new File([blob], `${baseName}.${ext}`, {

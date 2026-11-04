@@ -16,10 +16,10 @@ type CanvasContext2D = {
 }
 
 type StubCanvas = {
-  width: number
-  height: number
   getContext: (kind: string) => CanvasContext2D | null
+  height: number
   toBlob: CanvasToBlob
+  width: number
 }
 
 const originalCreateImageBitmap = (globalThis as any).createImageBitmap
@@ -27,21 +27,21 @@ const originalDocument = (globalThis as any).document
 
 type AlphaMode =
   | 'opaque' // every pixel fully opaque (alpha = 255)
-  | 'transparent' // at least one pixel has alpha < 255
   | 'throws' // getImageData throws (tainted canvas / cross-origin)
+  | 'transparent' // at least one pixel has alpha < 255
 
 type Stubs = {
-  bitmapWidth: number
-  bitmapHeight: number
-  bitmapThrows?: boolean
-  blob?: Blob | null
-  noContext?: boolean
   /**
    * Controls what `ctx.getImageData` returns for the alpha scan. Only
    * consulted for file types that could carry alpha (PNG/WebP/BMP/TIFF).
    * Defaults to 'opaque' so existing JPEG-path tests stay unaffected.
    */
   alpha?: AlphaMode
+  bitmapHeight: number
+  bitmapThrows?: boolean
+  bitmapWidth: number
+  blob?: Blob | null
+  noContext?: boolean
   /** Captures the MIME type passed to canvas.toBlob, for assertions. */
   onToBlob?: (type?: string, quality?: number) => void
 }
@@ -75,15 +75,13 @@ const buildGetImageData = (
 
 const installStubs = (stubs: Stubs) => {
   const bitmap: ImageBitmap = {
-    width: stubs.bitmapWidth,
-    height: stubs.bitmapHeight,
     close: () => {},
+    height: stubs.bitmapHeight,
+    width: stubs.bitmapWidth,
   } as unknown as ImageBitmap
 
-  const createImageBitmapStub: CreateImageBitmap = async () => {
-    if (stubs.bitmapThrows) throw new Error('decode failed')
-    return bitmap
-  }
+  const createImageBitmapStub: CreateImageBitmap = () =>
+    stubs.bitmapThrows ? Promise.reject(new Error('decode failed')) : Promise.resolve(bitmap)
   ;(globalThis as any).createImageBitmap = createImageBitmapStub
 
   const ctx: CanvasContext2D = {
@@ -92,17 +90,17 @@ const installStubs = (stubs: Stubs) => {
   }
 
   const canvas: StubCanvas = {
-    width: 0,
-    height: 0,
     getContext: () => (stubs.noContext ? null : ctx),
+    height: 0,
     toBlob: (cb, type, quality) => {
       stubs.onToBlob?.(type, quality)
       cb(stubs.blob ?? null)
     },
+    width: 0,
   }
   ;(globalThis as any).document = {
     createElement: (tag: string) => {
-      if (tag === 'canvas') return canvas
+      if (tag === 'canvas') {return canvas}
       throw new Error(`unexpected createElement('${tag}')`)
     },
   }
@@ -129,21 +127,21 @@ describe('resizeImage', () => {
   })
 
   test('returns original file when createImageBitmap throws (corrupt/OOM)', async () => {
-    installStubs({ bitmapWidth: 4000, bitmapHeight: 3000, bitmapThrows: true })
+    installStubs({ bitmapHeight: 3000, bitmapThrows: true, bitmapWidth: 4000 })
     const file = new File(['corrupt'], 'big.jpg', { type: 'image/jpeg' })
     const result = await resizeImage(file)
     expect(result).toBe(file)
   })
 
   test('returns original file when image is within max dimensions', async () => {
-    installStubs({ bitmapWidth: 1920, bitmapHeight: 1080 })
+    installStubs({ bitmapHeight: 1080, bitmapWidth: 1920 })
     const file = new File(['hd'], 'hd.jpg', { type: 'image/jpeg' })
     const result = await resizeImage(file)
     expect(result).toBe(file)
   })
 
   test('returns original file when canvas.toBlob yields null (iOS Safari edge case)', async () => {
-    installStubs({ bitmapWidth: 4000, bitmapHeight: 3000, blob: null })
+    installStubs({ bitmapHeight: 3000, bitmapWidth: 4000, blob: null })
     const file = new File(['oversized'], 'huge.jpg', { type: 'image/jpeg' })
     const result = await resizeImage(file)
     // Critical: must be the original, NOT a File([null], ...) with garbage content.
@@ -152,8 +150,8 @@ describe('resizeImage', () => {
 
   test('returns original file when canvas.toBlob yields an empty blob', async () => {
     installStubs({
-      bitmapWidth: 4000,
       bitmapHeight: 3000,
+      bitmapWidth: 4000,
       blob: new Blob([], { type: 'image/jpeg' }),
     })
     const file = new File(['oversized'], 'huge.jpg', { type: 'image/jpeg' })
@@ -162,7 +160,7 @@ describe('resizeImage', () => {
   })
 
   test('returns original file when canvas getContext returns null', async () => {
-    installStubs({ bitmapWidth: 4000, bitmapHeight: 3000, noContext: true })
+    installStubs({ bitmapHeight: 3000, bitmapWidth: 4000, noContext: true })
     const file = new File(['oversized'], 'huge.jpg', { type: 'image/jpeg' })
     const result = await resizeImage(file)
     expect(result).toBe(file)
@@ -170,7 +168,7 @@ describe('resizeImage', () => {
 
   test('produces a new resized File with .jpg extension for non-PNG inputs', async () => {
     const fakeBlob = new Blob(['resized-bytes'], { type: 'image/jpeg' })
-    installStubs({ bitmapWidth: 4000, bitmapHeight: 3000, blob: fakeBlob })
+    installStubs({ bitmapHeight: 3000, bitmapWidth: 4000, blob: fakeBlob })
     const file = new File(['oversized'], 'IMG_1234.JPEG', { type: 'image/jpeg' })
     const result = await resizeImage(file)
     expect(result).not.toBe(file)
@@ -183,10 +181,10 @@ describe('resizeImage', () => {
     const fakeBlob = new Blob(['resized-bytes'], { type: 'image/png' })
     let seenType: string | undefined
     installStubs({
-      bitmapWidth: 4000,
-      bitmapHeight: 3000,
-      blob: fakeBlob,
       alpha: 'opaque',
+      bitmapHeight: 3000,
+      bitmapWidth: 4000,
+      blob: fakeBlob,
       onToBlob: (type) => {
         seenType = type
       },
@@ -206,10 +204,10 @@ describe('resizeImage', () => {
     const fakeBlob = new Blob(['resized-bytes'], { type: 'image/png' })
     let seenType: string | undefined
     installStubs({
-      bitmapWidth: 4000,
-      bitmapHeight: 3000,
-      blob: fakeBlob,
       alpha: 'transparent',
+      bitmapHeight: 3000,
+      bitmapWidth: 4000,
+      blob: fakeBlob,
       onToBlob: (type) => {
         seenType = type
       },
@@ -225,10 +223,10 @@ describe('resizeImage', () => {
     const fakeBlob = new Blob(['resized-bytes'], { type: 'image/jpeg' })
     let seenType: string | undefined
     installStubs({
-      bitmapWidth: 4000,
-      bitmapHeight: 3000,
-      blob: fakeBlob,
       alpha: 'opaque',
+      bitmapHeight: 3000,
+      bitmapWidth: 4000,
+      blob: fakeBlob,
       onToBlob: (type) => {
         seenType = type
       },
@@ -243,7 +241,7 @@ describe('resizeImage', () => {
   test('JPEG skips the alpha scan (fast path)', async () => {
     const fakeBlob = new Blob(['resized-bytes'], { type: 'image/jpeg' })
     const getImageDataSpy = vi.fn(buildGetImageData('opaque'))
-    installStubs({ bitmapWidth: 4000, bitmapHeight: 3000, blob: fakeBlob })
+    installStubs({ bitmapHeight: 3000, bitmapWidth: 4000, blob: fakeBlob })
     // Overwrite the ctx's getImageData with a spy so we can assert it's
     // never called on the JPEG path.
     const doc = (globalThis as any).document as { createElement: (t: string) => StubCanvas }
@@ -253,7 +251,7 @@ describe('resizeImage', () => {
     // Reinstall document so subsequent createElement returns the same canvas.
     ;(globalThis as any).document = {
       createElement: (tag: string) => {
-        if (tag === 'canvas') return canvas
+        if (tag === 'canvas') {return canvas}
         throw new Error(`unexpected createElement('${tag}')`)
       },
     }
@@ -266,10 +264,10 @@ describe('resizeImage', () => {
     const fakeBlob = new Blob(['resized-bytes'], { type: 'image/png' })
     let seenType: string | undefined
     installStubs({
-      bitmapWidth: 4000,
-      bitmapHeight: 3000,
-      blob: fakeBlob,
       alpha: 'throws',
+      bitmapHeight: 3000,
+      bitmapWidth: 4000,
+      blob: fakeBlob,
       onToBlob: (type) => {
         seenType = type
       },

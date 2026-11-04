@@ -241,10 +241,10 @@ describe('beforeChange hook — upload-time blurDataURL population', () => {
     const { default: sharp } = await import('sharp')
     return sharp({
       create: {
-        width: 32,
-        height: 32,
+        background: { b: 220, g: 180, r: 120 },
         channels: 3,
-        background: { r: 120, g: 180, b: 220 },
+        height: 32,
+        width: 32,
       },
     })
       .jpeg({ quality: 80 })
@@ -260,9 +260,9 @@ describe('beforeChange hook — upload-time blurDataURL population', () => {
     const data: Record<string, any> = {}
     const req = {
       file: {
+        name: 'test.jpg',
         data: buffer,
         mimetype: 'image/jpeg',
-        name: 'test.jpg',
         size: buffer.length,
       },
     }

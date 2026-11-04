@@ -49,11 +49,11 @@ export const getImageOptimizerField = (opts: {
     name: 'imageOptimizer',
     type: 'group',
     admin: {
-      position: 'sidebar',
-      readOnly: true,
       components: {
         Field: '@inoo-ch/payload-image-optimizer/client#OptimizationStatus',
       },
+      position: 'sidebar',
+      readOnly: true,
     },
     fields: opts.fieldsOverride
       ? opts.fieldsOverride({ defaultFields: base })

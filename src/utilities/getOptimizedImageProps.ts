@@ -1,13 +1,14 @@
 import type { MediaResource } from '../types.js'
+
 import { getImageOptimizerProps, type ImageOptimizerProps } from './getImageOptimizerProps.js'
 import { createVariantLoader } from './responsiveImage.js'
 
-type ImageLoaderProps = { src: string; width: number; quality?: number | undefined }
+type ImageLoaderProps = { quality?: number | undefined; src: string; width: number }
 type ImageLoader = (props: ImageLoaderProps) => string
 
-export type OptimizedImageProps = ImageOptimizerProps & {
+export type OptimizedImageProps = {
   loader?: ImageLoader
-}
+} & ImageOptimizerProps
 
 /**
  * Returns all optimization props for a Next.js `<Image>` component in a single
@@ -45,7 +46,7 @@ export function getOptimizedImageProps(
 ): OptimizedImageProps {
   const base = getImageOptimizerProps(resource)
 
-  if (!resource) return base
+  if (!resource) {return base}
 
   const loader = createVariantLoader(resource)
 

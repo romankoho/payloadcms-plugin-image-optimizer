@@ -1,5 +1,37 @@
 # Changelog
 
+## 4.0.0-beta.0 — Payload 4 support
+
+### Breaking
+
+- **`ImageBox` and `FadeImage` from `/client` and `/frontend` no longer use `next/image`.** They now render a plain `<img>` with `srcSet` / `sizes`, so they work outside Next.js (TanStack Start, Vite, …). The `next/image` versions moved to the new `@inoo-ch/payload-image-optimizer/next` entry point. Next.js projects must change the import path to keep v3 behavior; otherwise images silently stop going through `/_next/image`. TypeScript only flags the change if you pass `next/image`-only props (`quality`, `placeholder`, `loader`, `unoptimized`, static-import `src`). See `MIGRATION.md`.
+- `next` is now an optional peer dependency (`>=16.4.0`), needed only for the `/next` entry point.
+- **Requires Payload 4** (`payload`, `@payloadcms/ui` and the new peer dependency `@payloadcms/transformer-sharp`, all `^4.0.0-beta.7`), React `^19`, sharp `>=0.34.0` and Node.js `>=24.22.1`.
+- **Sharp settings move into the plugin config.** Payload 4 no longer reads `imageSizes`, `formatOptions`, `resizeOptions` or `withMetadata` from `collection.upload`. Set them under the new `collections.<slug>.sharp` option (same shape as `sharpTransformer({ collections })`; `imageSizes` is now `variants`). The plugin registers one `sharpTransformer` (slug `'image-optimizer-sharp'`) for all targeted collections. Do not also list those collections on your own `sharpTransformer()`.
+- **`doc.sizes` is now `doc.variants`** (Payload 4 rename). The `MediaResource` type drops `sizes` and adds `variants` and `original`.
+
+### Added
+
+- `collections.<slug>.sharp` — per-collection `SharpCollectionConfig`, merged over the plugin's defaults.
+- `transformer` option — passes `ImageOptimizerTransformerOptions` (custom `sharp` build, `dynamic`, `slug`) to the plugin's `sharpTransformer`.
+- `/next` entry point with the `next/image`-based `ImageBox` and `FadeImage`.
+- `getResponsiveImageProps()` in `/client` and `/frontend` — `src` + `srcSet` from the pre-generated variants for a plain `<img>`.
+
+### Changed
+
+- Filename strategies run in `beforeOperation`, before `generateFileData()`, so the stored filename always matches the stored file. The `generateFilename` contract (return a stem) is unchanged.
+- Regeneration reprocesses from Payload 4's retained original (`doc.original`) when present, so repeated regenerations no longer compound quality loss. Pre-v4 documents fall back to the main file.
+- The cache-buster (`v=<updatedAt>`) is appended with `&` when the URL already has a query string (for example signed CDN URLs).
+
+### Security
+
+- The internal regeneration-state global no longer allows anonymous `read` and `update` over REST and GraphQL; both now require a logged-in user. Versions and authorship fields are turned off for it. Plugin code uses `overrideAccess: true`, so the admin UI is unaffected.
+
+### Internal
+
+- Dev app moved from Next.js to TanStack Start (Vite). The dev and test setup uses MongoDB only.
+- `pnpm typecheck` script added.
+
 ## 3.5.2 — Saturate to the largest variant when the source has no more pixels
 
 `createVariantLoader()`'s fallback path sends every unmatched-width request through `/_next/image`. That's the right call when the parent file has more resolution than our largest pre-generated variant (e.g., a 2560×1920 source with a `large=1400w` variant) — Next.js can deliver more detail. But when the source itself has no more pixels than the largest variant — common on saturated parents whose dimensions equal the plugin's `maxDimensions` ceiling and are then mirrored by the largest configured `imageSize` — `/_next/image` was being asked to re-derive the same bytes from the parent and route them through an extra server hop. Same image, more latency, more compute, more cache fragmentation.

@@ -127,12 +127,53 @@ export const resolveCollectionConfig = (resolvedConfig, collectionSlug)=>{
     if (!collectionValue || collectionValue === true) {
         return {
             format: resolvedConfig.format,
-            maxDimensions: resolvedConfig.maxDimensions
+            maxDimensions: resolvedConfig.maxDimensions,
+            sharp: {}
         };
     }
     return {
         format: collectionValue.format ?? resolvedConfig.format,
-        maxDimensions: collectionValue.maxDimensions ?? resolvedConfig.maxDimensions
+        maxDimensions: collectionValue.maxDimensions ?? resolvedConfig.maxDimensions,
+        sharp: collectionValue.sharp ?? {}
+    };
+};
+/**
+ * Builds the `sharpTransformer({ collections })` entry for one collection:
+ * the plugin's defaults (format conversion, max-dimension resize, metadata
+ * policy, per-variant format) underneath the user's own `sharp` settings.
+ */ export const buildSharpCollectionConfig = (resolvedConfig, collectionConfig)=>{
+    const { format, maxDimensions, sharp: user } = collectionConfig;
+    const formatOptions = format ? {
+        format: format.format,
+        options: {
+            quality: format.quality
+        }
+    } : undefined;
+    let withMetadata = user.withMetadata;
+    if (withMetadata === undefined) {
+        const policy = resolvedConfig.metadataPolicy;
+        if (policy) {
+            withMetadata = async (args)=>policy(args);
+        } else if (resolvedConfig.stripMetadata) {
+            withMetadata = false;
+        }
+    }
+    return {
+        ...user,
+        formatOptions: user.formatOptions ?? formatOptions,
+        resizeOptions: user.resizeOptions ?? {
+            fit: 'inside',
+            height: maxDimensions.height,
+            width: maxDimensions.width,
+            withoutEnlargement: true
+        },
+        // Variants inherit the parent format unless they set their own, so every
+        // size lands as e.g. `.webp` (the extension follows the output bytes).
+        variants: formatOptions && user.variants ? user.variants.map((v)=>v.formatOptions !== undefined ? v : {
+                ...v,
+                formatOptions
+            }) : user.variants,
+        withMetadata
     };
 };
 

@@ -38,8 +38,8 @@ import { thumbHashToDataURL } from 'thumbhash';
     const stored = resource.imageOptimizer?.blurDataURL;
     if (stored) {
         return {
-            placeholder: 'blur',
             blurDataURL: stored,
+            placeholder: 'blur',
             style: {
                 objectPosition
             }
@@ -49,8 +49,8 @@ import { thumbHashToDataURL } from 'thumbhash';
         const bytes = Uint8Array.from(atob(thumbHash), (c)=>c.charCodeAt(0));
         const blurDataURL = thumbHashToDataURL(bytes);
         return {
-            placeholder: 'blur',
             blurDataURL,
+            placeholder: 'blur',
             style: {
                 objectPosition
             }

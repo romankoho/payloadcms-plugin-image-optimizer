@@ -1,12 +1,12 @@
 import type { Payload } from 'payload'
 
 import config from '@payload-config'
-import { getPayload } from 'payload'
-import path from 'path'
 import fs from 'fs/promises'
+import path from 'path'
+import { getPayload } from 'payload'
 import sharp from 'sharp'
-import { afterAll, beforeAll, describe, expect, test, vi } from 'vitest'
 import { fileURLToPath } from 'url'
+import { afterAll, beforeAll, describe, expect, test, vi } from 'vitest'
 
 import { resolveConfig } from '../src/defaults.js'
 import {
@@ -23,10 +23,10 @@ let payload: Payload
 async function createTestImage(width = 800, height = 600): Promise<Buffer> {
   return sharp({
     create: {
-      width,
-      height,
+      background: { b: 64, g: 128, r: 255 },
       channels: 3,
-      background: { r: 255, g: 128, b: 64 },
+      height,
+      width,
     },
   })
     .jpeg({ quality: 90 })
@@ -73,21 +73,22 @@ describe('Image Optimizer Plugin', () => {
       collection: 'media',
       data: {},
       file: {
+        name: 'test-large.jpg',
         data: buffer,
         mimetype: 'image/jpeg',
-        name: 'test-large.jpg',
         size: buffer.length,
       },
+      overrideAccess: true,
     })
 
     expect(doc.imageOptimizer).toBeDefined()
-    expect(doc.imageOptimizer.originalSize).toBeGreaterThan(0)
-    expect(doc.imageOptimizer.optimizedSize).toBeGreaterThan(0)
+    expect(doc.imageOptimizer!.originalSize).toBeGreaterThan(0)
+    expect(doc.imageOptimizer!.optimizedSize).toBeGreaterThan(0)
     // originalSize is captured by the beforeOperation hook before Payload
     // mutates req.file. Optimization should produce a smaller file.
-    expect(doc.imageOptimizer.optimizedSize).toBeLessThan(doc.imageOptimizer.originalSize)
+    expect(doc.imageOptimizer!.optimizedSize).toBeLessThan(doc.imageOptimizer!.originalSize!)
     // v3: beforeChange resolves status synchronously — no pending state.
-    expect(doc.imageOptimizer.status).toBe('complete')
+    expect(doc.imageOptimizer!.status).toBe('complete')
 
     // Verify the saved file was resized within max dimensions
     const savedPath = path.resolve(dirname, 'media', doc.filename as string)
@@ -107,19 +108,20 @@ describe('Image Optimizer Plugin', () => {
       collection: 'media',
       data: {},
       file: {
+        name: 'test-sizes-webp.jpg',
         data: buffer,
         mimetype: 'image/jpeg',
-        name: 'test-sizes-webp.jpg',
         size: buffer.length,
       },
+      overrideAccess: true,
     })
 
     // Payload's createImageSizes uses formatOptions on each imageSize, which
     // we inject at plugin init. Each size's filename + mimeType reflects webp.
-    const sizes = (doc as any).sizes as Record<string, any>
+    const sizes = (doc as any).variants as Record<string, any>
     expect(sizes).toBeDefined()
     for (const [sizeName, sizeData] of Object.entries(sizes)) {
-      if (!sizeData || !sizeData.filename) continue
+      if (!sizeData || !sizeData.filename) {continue}
       expect(sizeData.mimeType, `${sizeName}.mimeType`).toBe('image/webp')
       expect(sizeData.filename, `${sizeName}.filename`).toMatch(/\.webp$/)
     }
@@ -137,14 +139,15 @@ describe('Image Optimizer Plugin', () => {
       collection: 'media',
       data: {},
       file: {
+        name: 'test-aspect-regression.jpg',
         data: buffer,
         mimetype: 'image/jpeg',
-        name: 'test-aspect-regression.jpg',
         size: buffer.length,
       },
+      overrideAccess: true,
     })
 
-    const sizes = (doc as any).sizes as Record<string, any>
+    const sizes = (doc as any).variants as Record<string, any>
     expect(sizes.og?.width).toBe(1200)
     expect(sizes.og?.height).toBe(630)
     expect(sizes.square?.width).toBe(500)
@@ -162,19 +165,20 @@ describe('Image Optimizer Plugin', () => {
       collection: 'media',
       data: {},
       file: {
+        name: 'test-blur.jpg',
         data: buffer,
         mimetype: 'image/jpeg',
-        name: 'test-blur.jpg',
         size: buffer.length,
       },
+      overrideAccess: true,
     })
 
     // v3: ThumbHash is computed inline in beforeChange — available immediately.
-    expect(doc.imageOptimizer.thumbHash).toBeDefined()
-    expect(typeof doc.imageOptimizer.thumbHash).toBe('string')
-    expect(doc.imageOptimizer.thumbHash.length).toBeGreaterThan(0)
+    expect(doc.imageOptimizer!.thumbHash).toBeDefined()
+    expect(typeof doc.imageOptimizer!.thumbHash).toBe('string')
+    expect(doc.imageOptimizer!.thumbHash!.length).toBeGreaterThan(0)
 
-    const decoded = Buffer.from(doc.imageOptimizer.thumbHash, 'base64')
+    const decoded = Buffer.from(doc.imageOptimizer!.thumbHash!, 'base64')
     expect(decoded.length).toBeGreaterThan(0)
   })
 
@@ -185,11 +189,12 @@ describe('Image Optimizer Plugin', () => {
       collection: 'avatars',
       data: {},
       file: {
+        name: 'test-avatar-resize.jpg',
         data: buffer,
         mimetype: 'image/jpeg',
-        name: 'test-avatar-resize.jpg',
         size: buffer.length,
       },
+      overrideAccess: true,
     })
 
     // Verify the saved file was resized within 256x256
@@ -210,14 +215,15 @@ describe('Image Optimizer Plugin', () => {
       collection: 'avatars',
       data: {},
       file: {
+        name: 'test-avatar-formats.jpg',
         data: buffer,
         mimetype: 'image/jpeg',
-        name: 'test-avatar-formats.jpg',
         size: buffer.length,
       },
+      overrideAccess: true,
     })
 
-    expect(doc.imageOptimizer.status).toBe('complete')
+    expect(doc.imageOptimizer!.status).toBe('complete')
     expect(doc.mimeType).toBe('image/webp')
   })
 
@@ -228,14 +234,15 @@ describe('Image Optimizer Plugin', () => {
       collection: 'media',
       data: {},
       file: {
+        name: 'test-global-defaults.jpg',
         data: buffer,
         mimetype: 'image/jpeg',
-        name: 'test-global-defaults.jpg',
         size: buffer.length,
       },
+      overrideAccess: true,
     })
 
-    expect(doc.imageOptimizer.status).toBe('complete')
+    expect(doc.imageOptimizer!.status).toBe('complete')
     expect(doc.mimeType).toBe('image/webp')
   })
 
@@ -249,14 +256,15 @@ describe('Image Optimizer Plugin', () => {
     let doc: any
     try {
       doc = await payload.create({
-        collection: 'media',
+      collection: 'media',
         data: {},
         file: {
+          name: 'test-vector.svg',
           data: buffer,
           mimetype: 'image/svg+xml',
-          name: 'test-vector.svg',
           size: buffer.length,
         },
+        overrideAccess: true,
       })
     } catch (err) {
       // If Payload's generateFileData rejects SVG outright (upstream of our
@@ -270,8 +278,8 @@ describe('Image Optimizer Plugin', () => {
     }
 
     expect(doc.imageOptimizer).toBeDefined()
-    expect(doc.imageOptimizer.status).toBe('complete')
-    expect(doc.imageOptimizer.originalSize).toBe(doc.imageOptimizer.optimizedSize)
+    expect(doc.imageOptimizer!.status).toBe('complete')
+    expect(doc.imageOptimizer!.originalSize).toBe(doc.imageOptimizer!.optimizedSize)
   })
 
   test('should handle zero-byte buffer without crashing the plugin', async () => {
@@ -285,14 +293,15 @@ describe('Image Optimizer Plugin', () => {
     let doc: any = null
     try {
       doc = await payload.create({
-        collection: 'media',
+      collection: 'media',
         data: {},
         file: {
+          name: 'test-zero-byte.jpg',
           data: buffer,
           mimetype: 'image/jpeg',
-          name: 'test-zero-byte.jpg',
           size: 0,
         },
+        overrideAccess: true,
       })
     } catch (err) {
       // Payload may reject this — that's acceptable. What's NOT acceptable is
@@ -316,11 +325,12 @@ describe('Image Optimizer Plugin', () => {
       collection: 'media',
       data: {},
       file: {
+        name: 'test.txt',
         data: textBuffer,
         mimetype: 'text/plain',
-        name: 'test.txt',
         size: textBuffer.length,
       },
+      overrideAccess: true,
     })
 
     expect(doc.imageOptimizer?.status).toBeUndefined()
@@ -330,14 +340,15 @@ describe('Image Optimizer Plugin', () => {
     const buffer = await createTestImage(800, 600)
     const doc = await payload.create({
       collection: 'media',
+      context: { imageOptimizer_skip: true },
       data: {},
       file: {
+        name: 'test-regen-existing.jpg',
         data: buffer,
         mimetype: 'image/jpeg',
-        name: 'test-regen-existing.jpg',
         size: buffer.length,
       },
-      context: { imageOptimizer_skip: true },
+      overrideAccess: true,
     })
 
     // Verify no optimization data was generated
@@ -345,22 +356,23 @@ describe('Image Optimizer Plugin', () => {
 
     // Queue and run the regeneration task manually
     await payload.jobs.queue({
-      task: 'imageOptimizer_regenerateDocument',
       input: {
         collectionSlug: 'media',
         docId: String(doc.id),
       },
+      overrideAccess: true,
+      task: 'imageOptimizer_regenerateDocument',
     })
-    await payload.jobs.run()
+    await payload.jobs.run({ overrideAccess: true })
     await new Promise((resolve) => setTimeout(resolve, 500))
 
     // Fetch the document again and verify it now has optimization data
-    const updatedDoc = await payload.findByID({ collection: 'media', id: doc.id })
-    expect(updatedDoc.imageOptimizer.status).toBe('complete')
-    expect(updatedDoc.imageOptimizer.thumbHash).toBeDefined()
-    expect(updatedDoc.imageOptimizer.thumbHash.length).toBeGreaterThan(0)
-    expect(updatedDoc.imageOptimizer.originalSize).toBeGreaterThan(0)
-    expect(updatedDoc.imageOptimizer.optimizedSize).toBeGreaterThan(0)
+    const updatedDoc = await payload.findByID({ id: doc.id, collection: 'media', overrideAccess: true })
+    expect(updatedDoc.imageOptimizer!.status).toBe('complete')
+    expect(updatedDoc.imageOptimizer!.thumbHash).toBeDefined()
+    expect(updatedDoc.imageOptimizer!.thumbHash!.length).toBeGreaterThan(0)
+    expect(updatedDoc.imageOptimizer!.originalSize!).toBeGreaterThan(0)
+    expect(updatedDoc.imageOptimizer!.optimizedSize).toBeGreaterThan(0)
     expect(updatedDoc.mimeType).toBe('image/webp')
   })
 
@@ -368,24 +380,26 @@ describe('Image Optimizer Plugin', () => {
     const textBuffer = Buffer.from('Hello')
     const doc = await payload.create({
       collection: 'media',
+      context: { imageOptimizer_skip: true },
       data: {},
       file: {
+        name: 'test-regen-skip.txt',
         data: textBuffer,
         mimetype: 'text/plain',
-        name: 'test-regen-skip.txt',
         size: textBuffer.length,
       },
-      context: { imageOptimizer_skip: true },
+      overrideAccess: true,
     })
 
     await payload.jobs.queue({
-      task: 'imageOptimizer_regenerateDocument',
       input: { collectionSlug: 'media', docId: String(doc.id) },
+      overrideAccess: true,
+      task: 'imageOptimizer_regenerateDocument',
     })
-    await payload.jobs.run()
+    await payload.jobs.run({ overrideAccess: true })
     await new Promise((resolve) => setTimeout(resolve, 500))
 
-    const updatedDoc = await payload.findByID({ collection: 'media', id: doc.id })
+    const updatedDoc = await payload.findByID({ id: doc.id, collection: 'media', overrideAccess: true })
     expect(updatedDoc.imageOptimizer?.status).toBeUndefined()
   })
 
@@ -394,26 +408,26 @@ describe('Image Optimizer Plugin', () => {
     // config matches what the running server actually has wired up.
     const resolvedConfig = resolveConfig({
       collections: {
-        media: true,
         avatars: {
-          maxDimensions: { width: 256, height: 256 },
           format: { format: 'webp', quality: 90 },
+          maxDimensions: { height: 256, width: 256 },
         },
+        media: true,
       },
     })
 
     const mkReq = (
       overrides: {
-        url?: string
         body?: unknown
-        user?: Record<string, unknown> | null
+        url?: string
+        user?: null | Record<string, unknown>
       } = {},
     ) =>
       ({
-        user: overrides.user === null ? undefined : overrides.user ?? { id: 'test-user' },
-        url: overrides.url ?? 'http://localhost/api/image-optimizer/regenerate',
+        json: () => Promise.resolve(overrides.body ?? {}),
         payload,
-        json: async () => overrides.body ?? {},
+        url: overrides.url ?? 'http://localhost/api/image-optimizer/regenerate',
+        user: overrides.user === null ? undefined : overrides.user ?? { id: 'test-user' },
       }) as any
 
     test('GET returns 200 with configured:false for an unconfigured collection (log-noise fix)', async () => {
@@ -480,25 +494,27 @@ describe('Image Optimizer Plugin', () => {
     const buffer = await createTestImage(800, 600)
     const doc = await payload.create({
       collection: 'avatars',
+      context: { imageOptimizer_skip: true },
       data: {},
       file: {
+        name: 'test-regen-avatar.jpg',
         data: buffer,
         mimetype: 'image/jpeg',
-        name: 'test-regen-avatar.jpg',
         size: buffer.length,
       },
-      context: { imageOptimizer_skip: true },
+      overrideAccess: true,
     })
 
     await payload.jobs.queue({
-      task: 'imageOptimizer_regenerateDocument',
       input: { collectionSlug: 'avatars', docId: String(doc.id) },
+      overrideAccess: true,
+      task: 'imageOptimizer_regenerateDocument',
     })
-    await payload.jobs.run()
+    await payload.jobs.run({ overrideAccess: true })
     await new Promise((resolve) => setTimeout(resolve, 500))
 
-    const updatedDoc = await payload.findByID({ collection: 'avatars', id: doc.id })
-    expect(updatedDoc.imageOptimizer.status).toBe('complete')
+    const updatedDoc = await payload.findByID({ id: doc.id, collection: 'avatars', overrideAccess: true })
+    expect(updatedDoc.imageOptimizer!.status).toBe('complete')
     expect(updatedDoc.mimeType).toBe('image/webp')
 
     // Verify file was resized
@@ -516,25 +532,27 @@ describe('Image Optimizer Plugin', () => {
     const buffer = await createTestImage(400, 300)
     const doc = await payload.create({
       collection: 'media',
+      context: { imageOptimizer_skip: true },
       data: {},
       file: {
+        name: 'test-regen-deleted.jpg',
         data: buffer,
         mimetype: 'image/jpeg',
-        name: 'test-regen-deleted.jpg',
         size: buffer.length,
       },
-      context: { imageOptimizer_skip: true },
+      overrideAccess: true,
     })
 
-    await payload.delete({ collection: 'media', id: doc.id })
+    await payload.delete({ id: doc.id, collection: 'media', overrideAccess: true })
 
     const errorSpy = vi.spyOn(payload.logger, 'error')
 
     await payload.jobs.queue({
-      task: 'imageOptimizer_regenerateDocument',
       input: { collectionSlug: 'media', docId: String(doc.id) },
+      overrideAccess: true,
+      task: 'imageOptimizer_regenerateDocument',
     })
-    await payload.jobs.run()
+    await payload.jobs.run({ overrideAccess: true })
     await new Promise((resolve) => setTimeout(resolve, 500))
 
     // Guard catches findByID NotFound → returns terminal skip. No error
@@ -545,5 +563,47 @@ describe('Image Optimizer Plugin', () => {
     expect(persistFailureLog).toBe(false)
 
     errorSpy.mockRestore()
+  })
+})
+
+describe('Payload 4 specifics', () => {
+  test('original upload is retained and regeneration reprocesses from it', async () => {
+    const buffer = await createTestImage(4000, 3000)
+    const doc = await payload.create({
+      collection: 'media',
+      data: {},
+      file: { name: 'v4-original.jpg', data: buffer, mimetype: 'image/jpeg', size: buffer.length },
+      overrideAccess: true,
+    })
+
+    const original = (doc as any).original
+    expect(original?.mimeType).toBe('image/jpeg')
+    expect(original?.width).toBe(4000)
+    expect(doc.mimeType).toBe('image/webp')
+    expect(doc.width).toBe(2560)
+
+    await payload.jobs.queue({
+      input: { collectionSlug: 'media', docId: String(doc.id) },
+      overrideAccess: true,
+      task: 'imageOptimizer_regenerateDocument',
+    })
+    await payload.jobs.run({ overrideAccess: true })
+
+    const regenerated = await payload.findByID({ id: doc.id, collection: 'media', overrideAccess: true })
+    expect(regenerated.imageOptimizer?.status).toBe('complete')
+    expect(regenerated.mimeType).toBe('image/webp')
+    // Source was the 4000px original, not the 2560px main file: still capped at 2560.
+    expect(regenerated.width).toBe(2560)
+    // The stored filename points at a real file.
+    await expect(
+      fs.stat(path.resolve(dirname, 'media', regenerated.filename as string)),
+    ).resolves.toBeDefined()
+    expect(Object.keys((regenerated as any).variants ?? {})).toContain('thumbnail')
+  })
+
+  test('plugin global opts out of versions and authorship', () => {
+    const global = payload.config.globals.find((g) => g.slug === 'image-optimizer-state') as any
+    expect(global.versions).toBeFalsy()
+    expect(global.fields.find((f: any) => f.name === 'createdBy')).toBeUndefined()
   })
 })

@@ -1,62 +1,62 @@
 export const translations = {
-    en: {
-        'plugin-imageOptimizer': {
-            noData: 'No optimization data yet. Upload an image to optimize.',
-            blurPreview: 'Blur Preview',
-            original: 'Original',
-            optimized: 'Optimized',
-            regenerateImages: 'Regenerate Images',
-            regenerating: 'Regenerating...',
-            forceReprocess: 'Force re-process all',
-            allOptimized: 'All images already optimized.',
-            stallMessage: 'Process stalled. {{count}} image(s) failed to process.',
-            complete: 'complete',
-            errors: 'errors',
-            done: 'Done!',
-            optimizedCount: '{{complete}}/{{total}} optimized',
-            failed: '{{count}} failed.',
-            allImagesOptimized: 'All {{count}} images optimized',
-            optimizing: 'Optimizing image…'
-        }
-    },
     de: {
         'plugin-imageOptimizer': {
-            noData: 'Noch keine Optimierungsdaten. Laden Sie ein Bild hoch.',
+            allImagesOptimized: 'Alle {{count}} Bilder optimiert',
+            allOptimized: 'Alle Bilder sind bereits optimiert.',
             blurPreview: 'Unschärfe-Vorschau',
-            original: 'Original',
+            complete: 'abgeschlossen',
+            done: 'Fertig!',
+            errors: 'Fehler',
+            failed: '{{count}} fehlgeschlagen.',
+            forceReprocess: 'Alle neu verarbeiten',
+            noData: 'Noch keine Optimierungsdaten. Laden Sie ein Bild hoch.',
             optimized: 'Optimiert',
+            optimizedCount: '{{complete}}/{{total}} optimiert',
+            optimizing: 'Bild wird optimiert…',
+            original: 'Original',
             regenerateImages: 'Bilder regenerieren',
             regenerating: 'Regenerierung...',
-            forceReprocess: 'Alle neu verarbeiten',
-            allOptimized: 'Alle Bilder sind bereits optimiert.',
-            stallMessage: 'Prozess gestoppt. {{count}} Bild(er) konnten nicht verarbeitet werden.',
-            complete: 'abgeschlossen',
-            errors: 'Fehler',
-            done: 'Fertig!',
-            optimizedCount: '{{complete}}/{{total}} optimiert',
-            failed: '{{count}} fehlgeschlagen.',
-            allImagesOptimized: 'Alle {{count}} Bilder optimiert',
-            optimizing: 'Bild wird optimiert…'
+            stallMessage: 'Prozess gestoppt. {{count}} Bild(er) konnten nicht verarbeitet werden.'
+        }
+    },
+    en: {
+        'plugin-imageOptimizer': {
+            allImagesOptimized: 'All {{count}} images optimized',
+            allOptimized: 'All images already optimized.',
+            blurPreview: 'Blur Preview',
+            complete: 'complete',
+            done: 'Done!',
+            errors: 'errors',
+            failed: '{{count}} failed.',
+            forceReprocess: 'Force re-process all',
+            noData: 'No optimization data yet. Upload an image to optimize.',
+            optimized: 'Optimized',
+            optimizedCount: '{{complete}}/{{total}} optimized',
+            optimizing: 'Optimizing image…',
+            original: 'Original',
+            regenerateImages: 'Regenerate Images',
+            regenerating: 'Regenerating...',
+            stallMessage: 'Process stalled. {{count}} image(s) failed to process.'
         }
     },
     fr: {
         'plugin-imageOptimizer': {
-            noData: "Aucune donnée d'optimisation. Téléchargez une image.",
+            allImagesOptimized: 'Les {{count}} images sont optimisées',
+            allOptimized: 'Toutes les images sont déjà optimisées.',
             blurPreview: 'Aperçu flou',
-            original: 'Original',
+            complete: 'terminé',
+            done: 'Terminé !',
+            errors: 'erreurs',
+            failed: '{{count}} échoué(s).',
+            forceReprocess: 'Forcer le retraitement',
+            noData: "Aucune donnée d'optimisation. Téléchargez une image.",
             optimized: 'Optimisé',
+            optimizedCount: '{{complete}}/{{total}} optimisé(s)',
+            optimizing: "Optimisation de l'image…",
+            original: 'Original',
             regenerateImages: 'Régénérer les images',
             regenerating: 'Régénération...',
-            forceReprocess: 'Forcer le retraitement',
-            allOptimized: 'Toutes les images sont déjà optimisées.',
-            stallMessage: 'Processus bloqué. {{count}} image(s) non traitée(s).',
-            complete: 'terminé',
-            errors: 'erreurs',
-            done: 'Terminé !',
-            optimizedCount: '{{complete}}/{{total}} optimisé(s)',
-            failed: '{{count}} échoué(s).',
-            allImagesOptimized: 'Les {{count}} images sont optimisées',
-            optimizing: "Optimisation de l'image…"
+            stallMessage: 'Processus bloqué. {{count}} image(s) non traitée(s).'
         }
     }
 };

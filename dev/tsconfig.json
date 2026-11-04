@@ -2,19 +2,17 @@
   "extends": "../tsconfig.json",
   "exclude": [],
   "include": [
-    "**/*.js",
-    "**/*.jsx",
-    "**/*.mjs",
-    "**/*.cjs",
     "**/*.ts",
     "**/*.tsx",
+    "**/*.js",
     "../src/**/*.ts",
-    "../src/**/*.tsx",
-    "next.config.mjs",
-    ".next/types/**/*.ts"
+    "../src/**/*.tsx"
   ],
   "compilerOptions": {
-    "baseUrl": "./",
+    "rootDir": "..",
+    "module": "esnext",
+    "moduleResolution": "bundler",
+    "types": ["node", "vite/client"],
     "paths": {
       "@payload-config": [
         "./payload.config.ts"
@@ -28,11 +26,16 @@
       "@inoo-ch/payload-image-optimizer/frontend": [
         "../src/exports/frontend.ts"
       ],
+      "@inoo-ch/payload-image-optimizer/next": [
+        "../src/exports/next.ts"
+      ],
       "@inoo-ch/payload-image-optimizer/rsc": [
         "../src/exports/rsc.ts"
       ]
     },
     "noEmit": true,
-    "emitDeclarationOnly": false,
+    "composite": false,
+    "incremental": false,
+    "emitDeclarationOnly": false
   }
 }

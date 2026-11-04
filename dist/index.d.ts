@@ -1,7 +1,7 @@
 import type { Config } from 'payload';
 import type { ImageOptimizerConfig } from './types.js';
 export { defaultImageOptimizerFields } from './fields/imageOptimizerField.js';
-export type { CollectionOptimizerConfig, FieldsOverride, FormatQuality, GenerateFilename, GenerateFilenameArgs, ImageFormat, ImageOptimizerConfig, ImageOptimizerData, MediaResource, MediaSizeVariant } from './types.js';
+export type { CollectionOptimizerConfig, FieldsOverride, FormatQuality, GenerateFilename, GenerateFilenameArgs, ImageFormat, ImageOptimizerConfig, ImageOptimizerData, ImageOptimizerTransformerOptions, MediaResource, MediaSizeVariant } from './types.js';
 export { seoFilename, timestampFilename, uuidFilename } from './utilities/filenameStrategies.js';
 export { decodeThumbHashToDataURL, encodeImageToThumbHash } from './utilities/thumbhash.js';
 /**

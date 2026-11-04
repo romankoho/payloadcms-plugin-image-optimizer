@@ -2,10 +2,11 @@ import type { ResolvedImageOptimizerConfig } from '../types.js';
 /**
  * Regeneration via Payload's native pipeline.
  *
- * Reads the existing parent file, then calls `payload.update({ file })` to
- * push it back through the same pipeline a fresh upload uses. Because the
- * plugin injects `formatOptions` / `resizeOptions` / `withMetadata` into the
- * upload config at init, Payload's `generateFileData()` re-applies the same
+ * Reads the retained original (or, for pre-v4 docs, the stored main file),
+ * then calls `payload.update({ file })` to push it back through the same
+ * pipeline a fresh upload uses. Because the plugin registers a
+ * `sharpTransformer` with `formatOptions` / `resizeOptions` / `withMetadata`,
+ * Payload's `generateFileData()` re-applies the same
  * resize + format conversion + metadata strip pass, and our `beforeChange`
  * hook re-stamps `imageOptimizer` (status + thumbhash).
  *

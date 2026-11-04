@@ -1,3 +1,4 @@
+import type { SharpCollectionConfig, SharpTransformerOptions } from '@payloadcms/transformer-sharp'
 import type { CollectionSlug, Field } from 'payload'
 
 export type ImageFormat = 'avif' | 'webp'
@@ -33,7 +34,22 @@ export type FormatQuality = {
 export type CollectionOptimizerConfig = {
   format?: FormatQuality
   maxDimensions?: { height: number; width: number }
+  /** Sharp settings for this collection, exactly as you would pass them to
+   * `sharpTransformer({ collections: { <slug>: ... } })` — most importantly
+   * `variants` (the Payload 4 replacement for `upload.imageSizes`).
+   *
+   * The plugin registers its own `sharpTransformer` for every targeted
+   * collection, so do not also list the collection on another
+   * `sharpTransformer` instance. Values set here win over the plugin's
+   * defaults (`formatOptions`, `resizeOptions`, `withMetadata`, per-variant
+   * `formatOptions`). */
+  sharp?: SharpCollectionConfig
 }
+
+/** Options for the `sharpTransformer` the plugin registers on
+ * `config.upload.transformers`. `collections` is built by the plugin from the
+ * per-collection config. */
+export type ImageOptimizerTransformerOptions = Omit<SharpTransformerOptions, 'collections'>
 
 export type FieldsOverride = (args: { defaultFields: Field[] }) => Field[]
 
@@ -106,7 +122,7 @@ export type ResolvedLoggingConfig = {
  * Non-override rule: if the collection already has `upload.withMetadata`, the
  * plugin leaves it untouched.
  */
-export type MetadataPolicy = (args: { metadata: any }) => boolean | Promise<boolean>
+export type MetadataPolicy = (args: { metadata: any; req?: unknown }) => boolean | Promise<boolean>
 
 /**
  * Response header policy applied to file responses for targeted collections.
@@ -279,12 +295,18 @@ export type ImageOptimizerConfig = {
    *  Defaults to `false`. */
   storeBlurDataURL?: boolean
   stripMetadata?: boolean
+  /** Options for the `sharpTransformer` the plugin registers (custom `sharp`
+   * build, `dynamic` request-time resizing, `slug`). The slug defaults to
+   * `'image-optimizer-sharp'` so it never collides with a `sharpTransformer()`
+   * you register yourself for other collections. */
+  transformer?: ImageOptimizerTransformerOptions
 }
 
 export type ResolvedCollectionOptimizerConfig = {
   /** Null means "do not convert format" — preserve original extension. */
   format: FormatQuality | null
   maxDimensions: { height: number; width: number }
+  sharp: SharpCollectionConfig
 }
 
 export type ResolvedImageOptimizerConfig = {
@@ -333,8 +355,11 @@ export type MediaResource = {
   focalY?: null | number
   height?: null | number
   imageOptimizer?: ImageOptimizerData | null
-  sizes?: Record<string, MediaSizeVariant | undefined>
+  /** Retained original upload (Payload 4). Used as the regeneration source. */
+  original?: MediaSizeVariant | null
   updatedAt?: string
   url?: null | string
+  /** Generated image variants (Payload 4 renamed `sizes` to `variants`). */
+  variants?: null | Record<string, MediaSizeVariant | null | undefined>
   width?: null | number
 }

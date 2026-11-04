@@ -4,8 +4,8 @@
  * `src/components/RegenerationButton.tsx` for context.
  */
 
-export const readSlugFromUrl = (): string | null => {
-  if (typeof window === 'undefined') return null
+export const readSlugFromUrl = (): null | string => {
+  if (typeof window === 'undefined') {return null}
   return window.location.pathname.split('/collections/')[1]?.split('/')[0] ?? null
 }
 
@@ -20,11 +20,11 @@ export const readSlugFromUrl = (): string | null => {
  * across a navigation to an unrelated collection).
  */
 export const shouldFetchStatsForSlug = (
-  currentSlug: string | null,
-  mountedSlug: string | null,
-  urlSlug: string | null,
+  currentSlug: null | string,
+  mountedSlug: null | string,
+  urlSlug: null | string,
 ): currentSlug is string => {
-  if (!currentSlug) return false
-  if (mountedSlug && mountedSlug !== currentSlug) return false
+  if (!currentSlug) {return false}
+  if (mountedSlug && mountedSlug !== currentSlug) {return false}
   return urlSlug === currentSlug
 }

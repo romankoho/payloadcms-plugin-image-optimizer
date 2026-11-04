@@ -1,0 +1,25 @@
+minimumReleaseAgeExclude:
+  - '@next/env@16.4.5'
+  - '@next/swc-darwin-arm64@16.4.5'
+  - '@next/swc-darwin-x64@16.4.5'
+  - '@next/swc-linux-arm64-gnu@16.4.5'
+  - '@next/swc-linux-arm64-musl@16.4.5'
+  - '@next/swc-linux-x64-gnu@16.4.5'
+  - '@next/swc-linux-x64-musl@16.4.5'
+  - '@next/swc-win32-arm64-msvc@16.4.5'
+  - '@next/swc-win32-x64-msvc@16.4.5'
+  - '@payloadcms/db-mongodb@4.0.0-beta.7'
+  - '@payloadcms/graphql@4.0.0-beta.7'
+  - '@payloadcms/richtext-lexical@4.0.0-beta.7'
+  - '@payloadcms/tanstack-start@4.0.0-beta.7'
+  - '@payloadcms/transformer-sharp@4.0.0-beta.7'
+  - '@payloadcms/translations@4.0.0-beta.7'
+  - '@payloadcms/ui@4.0.0-beta.7'
+  - next@16.4.5
+  - payload@4.0.0-beta.7
+allowBuilds:
+  '@swc/core': true
+  esbuild: true
+  mongodb-memory-server: true
+  sharp: true
+  unrs-resolver: true

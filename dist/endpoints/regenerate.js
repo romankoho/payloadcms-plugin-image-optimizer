@@ -32,7 +32,8 @@ const statusGeneration = new Map();
 async function getCollectionState(payload, slug) {
     try {
         const state = await payload.findGlobal({
-            slug: GLOBAL_SLUG
+            slug: GLOBAL_SLUG,
+            overrideAccess: true
         });
         return state?.collections?.[slug] || {};
     } catch  {
@@ -45,7 +46,8 @@ async function setCollectionState(payload, slug, update) {
         let existing = {};
         try {
             const state = await payload.findGlobal({
-                slug: GLOBAL_SLUG
+                slug: GLOBAL_SLUG,
+                overrideAccess: true
             });
             existing = state?.collections || {};
         } catch  {
@@ -59,7 +61,8 @@ async function setCollectionState(payload, slug, update) {
             slug: GLOBAL_SLUG,
             data: {
                 collections: existing
-            }
+            },
+            overrideAccess: true
         });
     });
     // Swallow downstream errors so a failed write doesn't poison later writes
@@ -110,12 +113,14 @@ export const createRegenerateHandler = (resolvedConfig)=>{
                     // Isolated queue so host-side cron autorun can pick up regen jobs
                     // (via `queue: 'image-optimizer'`) without the plugin interfering
                     // with other consumers of the default queue.
-                    queue: IMAGE_OPTIMIZER_QUEUE,
-                    task: 'imageOptimizer_regenerateDocument',
                     input: {
                         collectionSlug,
                         docId
-                    }
+                    },
+                    queue: IMAGE_OPTIMIZER_QUEUE,
+                    task: 'imageOptimizer_regenerateDocument',
+                    // The endpoint already checked `req.user`; queue as trusted server work.
+                    overrideAccess: true
                 })));
             queued += ids.length;
         };
@@ -160,11 +165,12 @@ export const createRegenerateHandler = (resolvedConfig)=>{
             while(hasMore){
                 const result = await req.payload.find({
                     collection: collectionSlug,
-                    limit: 50,
-                    page,
                     depth: 0,
-                    where,
-                    sort: 'createdAt'
+                    limit: 50,
+                    overrideAccess: true,
+                    page,
+                    sort: 'createdAt',
+                    where
                 });
                 const ids = result.docs.map((doc)=>String(doc.id));
                 for(let i = 0; i < ids.length; i += CHUNK_SIZE){
@@ -179,9 +185,9 @@ export const createRegenerateHandler = (resolvedConfig)=>{
         invalidateStatusMemo(collectionSlug);
         // Clear any previous cancellation and record the start time + batch size
         await setCollectionState(req.payload, collectionSlug, {
-            startedAt: Date.now(),
             cancelledAt: undefined,
-            queued
+            queued,
+            startedAt: Date.now()
         });
         // Fire the job runner in bounded-parallel waves, kept alive past the
         // response via waitUntil so jobs progress on Vercel/serverless hosts
@@ -218,13 +224,16 @@ export const createRegenerateHandler = (resolvedConfig)=>{
                     }
                     try {
                         const result = await req.payload.jobs.run({
-                            queue: IMAGE_OPTIMIZER_QUEUE,
-                            limit: WAVE_SIZE
+                            limit: WAVE_SIZE,
+                            overrideAccess: true,
+                            queue: IMAGE_OPTIMIZER_QUEUE
                         });
                         // `noJobsRemaining: true` is the authoritative end signal. We
                         // don't use `remainingJobsFromQueried` because re-queues from a
                         // concurrent POST would make it trail reality.
-                        if (result?.noJobsRemaining) return;
+                        if (result?.noJobsRemaining) {
+                            return;
+                        }
                     } catch (err) {
                         req.payload.logger.error({
                             err
@@ -233,15 +242,15 @@ export const createRegenerateHandler = (resolvedConfig)=>{
                     }
                 }
                 req.payload.logger.warn({
-                    collectionSlug,
-                    budgetMs: WAVE_BUDGET_MS
+                    budgetMs: WAVE_BUDGET_MS,
+                    collectionSlug
                 }, 'Image optimizer: wave budget exhausted — remaining jobs stay queued for autorun or next regen');
             };
             waitUntil(runWaves(), req);
         }
         return Response.json({
-            queued,
-            collectionSlug
+            collectionSlug,
+            queued
         });
     };
     return handler;
@@ -271,14 +280,14 @@ export const createRegenerateStatusHandler = (resolvedConfig)=>{
         // errors. (POST/DELETE stay 400 — they have side effects.)
         if (!resolvedConfig.collections[collectionSlug]) {
             return Response.json({
+                allowForceAll: resolvedConfig.regenerateButton.allowForceAll,
+                cancelled: false,
                 collectionSlug,
-                configured: false,
-                total: 0,
                 complete: 0,
+                configured: false,
                 errored: 0,
                 pending: 0,
-                cancelled: false,
-                allowForceAll: resolvedConfig.regenerateButton.allowForceAll
+                total: 0
             });
         }
         // Hot path: memoize the full status payload for 5s per collection.
@@ -299,6 +308,7 @@ export const createRegenerateStatusHandler = (resolvedConfig)=>{
         const [total, complete, errored, collState] = await Promise.all([
             req.payload.count({
                 collection: collectionSlug,
+                overrideAccess: true,
                 where: {
                     mimeType: {
                         contains: 'image/'
@@ -307,23 +317,25 @@ export const createRegenerateStatusHandler = (resolvedConfig)=>{
             }),
             req.payload.count({
                 collection: collectionSlug,
+                overrideAccess: true,
                 where: {
-                    mimeType: {
-                        contains: 'image/'
-                    },
                     'imageOptimizer.status': {
                         equals: 'complete'
+                    },
+                    mimeType: {
+                        contains: 'image/'
                     }
                 }
             }),
             req.payload.count({
                 collection: collectionSlug,
+                overrideAccess: true,
                 where: {
-                    mimeType: {
-                        contains: 'image/'
-                    },
                     'imageOptimizer.status': {
                         equals: 'error'
+                    },
+                    mimeType: {
+                        contains: 'image/'
                     }
                 }
             }),
@@ -331,14 +343,14 @@ export const createRegenerateStatusHandler = (resolvedConfig)=>{
         ]);
         const cancelled = !!(collState.cancelledAt && collState.startedAt && collState.cancelledAt > collState.startedAt);
         const payload = {
+            allowForceAll: resolvedConfig.regenerateButton.allowForceAll,
+            cancelled,
             collectionSlug,
-            configured: true,
-            total: total.totalDocs,
             complete: complete.totalDocs,
+            configured: true,
             errored: errored.totalDocs,
             pending: total.totalDocs - complete.totalDocs - errored.totalDocs,
-            cancelled,
-            allowForceAll: resolvedConfig.regenerateButton.allowForceAll
+            total: total.totalDocs
         };
         // Only cache if nothing invalidated the memo while our Promise.all was
         // in flight. A mismatched generation means a newer write superseded our

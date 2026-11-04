@@ -2,6 +2,7 @@ import crypto from 'crypto'
 import path from 'path'
 
 import type { GenerateFilenameArgs } from '../types.js'
+
 import { stripDiacritics } from './stripDiacritics.js'
 import { toKebabCase } from './toKebabCase.js'
 

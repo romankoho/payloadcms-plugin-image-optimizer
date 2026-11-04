@@ -1,3 +1,4 @@
+// Framework-agnostic (TanStack Start, Vite, Next.js, …). Nothing here imports `next/*`.
 export { FadeImage } from '../components/FadeImage.js'
 export type { FadeImageProps } from '../components/FadeImage.js'
 export { ImageBox } from '../components/ImageBox.js'
@@ -6,4 +7,4 @@ export { getImageOptimizerProps } from '../utilities/getImageOptimizerProps.js'
 export type { ImageOptimizerProps } from '../utilities/getImageOptimizerProps.js'
 export { getOptimizedImageProps } from '../utilities/getOptimizedImageProps.js'
 export type { OptimizedImageProps } from '../utilities/getOptimizedImageProps.js'
-export { createVariantLoader, getDefaultSizes } from '../utilities/responsiveImage.js'
+export { createVariantLoader, getDefaultSizes, getResponsiveImageProps } from '../utilities/responsiveImage.js'

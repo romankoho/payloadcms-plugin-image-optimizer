@@ -30,6 +30,12 @@ export default [
     },
   },
   {
+    // src is linted against un-augmented Payload types (CollectionSlug = string),
+    // but consumers' generated types narrow it, so the `as CollectionSlug` casts are needed.
+    files: ['src/**'],
+    rules: { '@typescript-eslint/no-unnecessary-type-assertion': 'off' },
+  },
+  {
     languageOptions: {
       parserOptions: {
         sourceType: 'module',

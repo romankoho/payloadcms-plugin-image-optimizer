@@ -1,6 +1,6 @@
 import type { MediaResource, MediaSizeVariant } from '../types.js'
 
-type ImageLoaderProps = { src: string; width: number; quality?: number | undefined }
+type ImageLoaderProps = { quality?: number | undefined; src: string; width: number }
 type ImageLoader = (props: ImageLoaderProps) => string
 
 type ValidVariant = { url: string; width: number }
@@ -24,11 +24,11 @@ const ASPECT_RATIO_TOLERANCE = 0.03
  */
 function variantMatchesSourceAspect(
   variant: MediaSizeVariant,
-  sourceAspect: number | null,
+  sourceAspect: null | number,
 ): boolean {
-  if (sourceAspect === null) return true
-  if (typeof variant.width !== 'number' || typeof variant.height !== 'number') return true
-  if (variant.height === 0) return true
+  if (sourceAspect === null) {return true}
+  if (typeof variant.width !== 'number' || typeof variant.height !== 'number') {return true}
+  if (variant.height === 0) {return true}
 
   const variantAspect = variant.width / variant.height
   const drift = Math.abs(variantAspect - sourceAspect) / sourceAspect
@@ -36,7 +36,7 @@ function variantMatchesSourceAspect(
 }
 
 /**
- * Extracts usable variants from a Payload media resource's `sizes` field.
+ * Extracts usable variants from a Payload media resource's `variants` field.
  *
  * Filters out entries missing url/width, excludes variants whose aspect ratio
  * doesn't match the source (within {@link ASPECT_RATIO_TOLERANCE}), and sorts
@@ -44,7 +44,7 @@ function variantMatchesSourceAspect(
  * `og` (1200×630) or `square` (500×500) from polluting responsive srcsets.
  */
 export function getValidVariants(media: MediaResource): ValidVariant[] {
-  if (!media.sizes) return []
+  if (!media.variants) {return []}
 
   const sourceAspect =
     typeof media.width === 'number' &&
@@ -53,8 +53,8 @@ export function getValidVariants(media: MediaResource): ValidVariant[] {
       ? media.width / media.height
       : null
 
-  return Object.values(media.sizes)
-    .filter((v): v is MediaSizeVariant & { url: string; width: number } =>
+  return Object.values(media.variants)
+    .filter((v): v is { url: string; width: number } & MediaSizeVariant =>
       v != null && typeof v.url === 'string' && typeof v.width === 'number',
     )
     .filter((v) => variantMatchesSourceAspect(v, sourceAspect))
@@ -73,18 +73,66 @@ export function getValidVariants(media: MediaResource): ValidVariant[] {
 export function findBestVariant(
   variants: ValidVariant[],
   requestedWidth: number,
-): ValidVariant | null {
-  if (variants.length === 0) return null
+): null | ValidVariant {
+  if (variants.length === 0) {return null}
 
   // Smallest variant >= requested width
   const larger = variants.find((v) => v.width >= requestedWidth)
-  if (larger) return larger
+  if (larger) {return larger}
 
   // No variant large enough — use the largest if it's close
-  const largest = variants[variants.length - 1]!
-  if (largest.width >= requestedWidth * 0.8) return largest
+  const largest = variants[variants.length - 1]
+  if (largest.width >= requestedWidth * 0.8) {return largest}
 
   return null
+}
+
+/**
+ * Appends `v=<updatedAt>` so a re-processed file isn't served stale from
+ * caches. URLs may already carry a query string (signed CDN URLs); append
+ * with `&` in that case.
+ */
+export function appendCacheBust(url: string, updatedAt: null | string | undefined): string {
+  if (!updatedAt || !url) {return url}
+  const separator = url.includes('?') ? '&' : '?'
+  return `${url}${separator}v=${encodeURIComponent(String(updatedAt))}`
+}
+
+/**
+ * Framework-agnostic responsive attributes for a plain `<img>`: `src` plus a
+ * width-descriptor `srcSet` built from the pre-generated, aspect-matched
+ * variants. The main file is appended as the widest candidate when it is
+ * wider than every variant. Works on TanStack Start, Vite, Remix, Astro, or
+ * anything else that renders HTML — no image optimizer route required.
+ *
+ * ```tsx
+ * import { getResponsiveImageProps } from '@inoo-ch/payload-image-optimizer/frontend'
+ *
+ * <img {...getResponsiveImageProps(media)} sizes="100vw" alt={media.alt ?? ''} />
+ * ```
+ */
+export function getResponsiveImageProps(media: MediaResource): {
+  height?: number
+  src: string
+  srcSet?: string
+  width?: number
+} {
+  const src = appendCacheBust(media.url ?? '', media.updatedAt)
+  const variants = getValidVariants(media)
+  const candidates = variants.map((v) => `${appendCacheBust(v.url, media.updatedAt)} ${v.width}w`)
+
+  const width = typeof media.width === 'number' ? media.width : undefined
+  const largest = variants[variants.length - 1]
+  if (src && width && candidates.length > 0 && (!largest || width > largest.width)) {
+    candidates.push(`${src} ${width}w`)
+  }
+
+  return {
+    height: typeof media.height === 'number' ? media.height : undefined,
+    src,
+    srcSet: candidates.length > 0 ? candidates.join(', ') : undefined,
+    width,
+  }
 }
 
 /**
@@ -104,11 +152,7 @@ export function findBestVariant(
  */
 export function createVariantLoader(media: MediaResource): ImageLoader | undefined {
   const variants = getValidVariants(media)
-  if (variants.length === 0) return undefined
-
-  const encodedCacheBust = media.updatedAt
-    ? `v=${encodeURIComponent(String(media.updatedAt))}`
-    : ''
+  if (variants.length === 0) {return undefined}
 
   // Pre-resolve the largest valid variant once; closure-captured for the
   // saturation check on each loader invocation. `getValidVariants` already
@@ -117,17 +161,11 @@ export function createVariantLoader(media: MediaResource): ImageLoader | undefin
   const largestVariant = variants[variants.length - 1]
   const sourceWidth = typeof media.width === 'number' ? media.width : null
 
-  // Cache-bust applier. Pre-generated variant URLs may already carry a query
-  // string (signed CDN URLs); append with `&` in that case.
-  const withCacheBust = (url: string): string => {
-    if (!encodedCacheBust) return url
-    const separator = url.includes('?') ? '&' : '?'
-    return `${url}${separator}${encodedCacheBust}`
-  }
+  const withCacheBust = (url: string): string => appendCacheBust(url, media.updatedAt)
 
-  return ({ src, width, quality }) => {
+  return ({ quality, src, width }) => {
     const match = findBestVariant(variants, width)
-    if (match) return withCacheBust(match.url)
+    if (match) {return withCacheBust(match.url)}
 
     // Saturation: when the source has no more pixels than our largest
     // variant, returning the largest variant URL is strictly better than
@@ -162,6 +200,6 @@ export function createVariantLoader(media: MediaResource): ImageLoader | undefin
  * largest srcSet variant regardless of actual display area).
  */
 export function getDefaultSizes(fill: boolean | undefined): string | undefined {
-  if (!fill) return undefined
+  if (!fill) {return undefined}
   return '(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 33vw'
 }

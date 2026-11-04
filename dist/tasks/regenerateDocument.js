@@ -25,7 +25,8 @@ async function isCancelled(req, collectionSlug) {
     }
     try {
         const state = await req.payload.findGlobal({
-            slug: GLOBAL_SLUG
+            slug: GLOBAL_SLUG,
+            overrideAccess: true
         });
         const collState = state?.collections?.[collectionSlug];
         const value = !!(collState?.cancelledAt && collState.cancelledAt > (collState.startedAt ?? 0));
@@ -42,10 +43,11 @@ async function isCancelled(req, collectionSlug) {
 /**
  * Regeneration via Payload's native pipeline.
  *
- * Reads the existing parent file, then calls `payload.update({ file })` to
- * push it back through the same pipeline a fresh upload uses. Because the
- * plugin injects `formatOptions` / `resizeOptions` / `withMetadata` into the
- * upload config at init, Payload's `generateFileData()` re-applies the same
+ * Reads the retained original (or, for pre-v4 docs, the stored main file),
+ * then calls `payload.update({ file })` to push it back through the same
+ * pipeline a fresh upload uses. Because the plugin registers a
+ * `sharpTransformer` with `formatOptions` / `resizeOptions` / `withMetadata`,
+ * Payload's `generateFileData()` re-applies the same
  * resize + format conversion + metadata strip pass, and our `beforeChange`
  * hook re-stamps `imageOptimizer` (status + thumbhash).
  *
@@ -91,7 +93,8 @@ async function isCancelled(req, collectionSlug) {
                     // for no benefit (e.g. `folder` → parent folder → sibling
                     // documentsAndFolders array). Observed ~4-8s saved per job on
                     // media docs nested in populated folder trees.
-                    depth: 0
+                    depth: 0,
+                    overrideAccess: true
                 });
             } catch (err) {
                 if (isNotFound(err)) {
@@ -125,7 +128,12 @@ async function isCancelled(req, collectionSlug) {
                 };
             }
             const collectionConfig = req.payload.collections[input.collectionSlug].config;
-            const fileBuffer = await fetchFileBuffer(doc, collectionConfig, req.payload.config.serverURL);
+            // Payload 4 retains the untouched original upload. Reprocess from it so
+            // a regen never re-encodes an already-compressed file (generational
+            // quality loss). Docs uploaded before v4 have no `original` and fall
+            // back to the stored main file.
+            const source = doc.original?.filename ? doc.original : doc;
+            const fileBuffer = await fetchFileBuffer(source, collectionConfig, req.payload.config.serverURL);
             const safeFilename = path.basename(doc.filename);
             // Carry forward the previously recorded `originalSize` (set on first
             // upload, possibly from the pre-client-resize byte count). Without this
@@ -165,9 +173,10 @@ async function isCancelled(req, collectionSlug) {
                 file: {
                     name: safeFilename,
                     data: fileBuffer,
-                    mimetype: doc.mimeType,
+                    mimetype: source.mimeType ?? doc.mimeType,
                     size: fileBuffer.length
                 },
+                overrideAccess: true,
                 // overwriteExistingFiles avoids the safe-filename suffix dance — we
                 // want the file written with the same name (post format extension swap).
                 overwriteExistingFiles: true,
@@ -234,7 +243,8 @@ async function isCancelled(req, collectionSlug) {
                         }
                     },
                     depth: 0,
-                    disableTransaction: true
+                    disableTransaction: true,
+                    overrideAccess: true
                 });
             } catch (updateErr) {
                 // Suppress the double-log when the error-writeback also hits a

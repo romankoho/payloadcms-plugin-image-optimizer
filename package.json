@@ -1,7 +1,7 @@
 {
   "name": "@inoo-ch/payload-image-optimizer",
-  "version": "3.5.2",
-  "description": "Payload CMS plugin: client-side pre-resize, ThumbHash blur placeholders, filename strategies, bulk regeneration UI, and Next.js display components — on top of Payload's native sharp pipeline",
+  "version": "4.0.0-beta.0",
+  "description": "Payload CMS 4 plugin: client-side pre-resize, ThumbHash blur placeholders, filename strategies, bulk regeneration UI, and framework-agnostic (TanStack Start, Next.js) display components — on top of @payloadcms/transformer-sharp",
   "license": "MIT",
   "keywords": [
     "payload",
@@ -13,7 +13,9 @@
     "client-resize",
     "filename-strategy",
     "webp",
-    "sharp"
+    "sharp",
+    "tanstack-start",
+    "nextjs"
   ],
   "homepage": "https://github.com/PascalEugster/payloadcms-plugin-image-optimizer",
   "repository": {
@@ -44,6 +46,11 @@
       "import": "./dist/exports/rsc.js",
       "types": "./src/exports/rsc.ts",
       "default": "./dist/exports/rsc.js"
+    },
+    "./next": {
+      "import": "./dist/exports/next.js",
+      "types": "./src/exports/next.ts",
+      "default": "./dist/exports/next.js"
     }
   },
   "main": "./src/index.ts",
@@ -59,62 +66,65 @@
     "build:types": "tsc --outDir dist --rootDir ./src",
     "clean": "rimraf {dist,*.tsbuildinfo}",
     "copyfiles": "copyfiles -u 1 \"src/**/*.{html,css,scss,ttf,woff,woff2,eot,svg,jpg,png,json}\" dist/",
-    "dev": "next dev dev --turbo",
+    "dev": "cross-env NODE_OPTIONS=--no-deprecation vite dev --config dev/vite.config.ts",
     "dev:generate-importmap": "pnpm dev:payload generate:importmap",
     "dev:generate-types": "pnpm dev:payload generate:types",
-    "dev:payload": "cross-env PAYLOAD_CONFIG_PATH=./dev/payload.config.ts payload",
+    "dev:payload": "cross-env PAYLOAD_CONFIG_PATH=./dev/payload.config.ts NODE_OPTIONS=--no-deprecation payload",
     "generate:importmap": "pnpm dev:generate-importmap",
     "generate:types": "pnpm dev:generate-types",
     "lint": "eslint",
     "lint:fix": "eslint ./src --fix",
     "test": "pnpm test:int && pnpm test:e2e",
     "test:e2e": "playwright test",
-    "test:int": "vitest"
+    "test:int": "vitest",
+    "typecheck": "tsc --noEmit -p dev/tsconfig.json"
   },
   "devDependencies": {
     "@eslint/eslintrc": "^3.2.0",
-    "@payloadcms/db-mongodb": "3.79.0",
-    "@payloadcms/db-postgres": "3.79.0",
-    "@payloadcms/db-sqlite": "3.79.0",
+    "@payloadcms/db-mongodb": "4.0.0-beta.7",
     "@payloadcms/eslint-config": "3.9.0",
-    "@payloadcms/next": "3.79.0",
-    "@payloadcms/richtext-lexical": "3.79.0",
-    "@payloadcms/ui": "3.79.0",
-    "@playwright/test": "1.58.2",
-    "@swc-node/register": "1.10.9",
-    "@swc/cli": "0.6.0",
-    "@types/node": "22.19.9",
-    "@types/react": "19.2.9",
-    "@types/react-dom": "19.2.3",
+    "@payloadcms/richtext-lexical": "4.0.0-beta.7",
+    "@payloadcms/tanstack-start": "4.0.0-beta.7",
+    "@payloadcms/transformer-sharp": "4.0.0-beta.7",
+    "@payloadcms/ui": "4.0.0-beta.7",
+    "@playwright/test": "1.64.1",
+    "@swc-node/register": "1.12.1",
+    "@swc/cli": "0.8.2",
+    "@tanstack/react-router": "1.170.46",
+    "@tanstack/react-start": "1.169.4",
+    "@types/node": "24.12.3",
+    "@types/react": "19.3.0",
+    "@types/react-dom": "19.3.0",
+    "@vitejs/plugin-react": "6.2.1",
+    "@vitejs/plugin-rsc": "0.5.38",
     "copyfiles": "2.4.1",
-    "cross-env": "^7.0.3",
+    "cross-env": "^10.1.0",
     "eslint": "^9.23.0",
-    "eslint-config-next": "15.4.11",
     "graphql": "^16.8.1",
-    "mongodb-memory-server": "10.1.4",
-    "next": "15.4.11",
-    "open": "^10.1.0",
-    "payload": "3.79.0",
+    "mongodb-memory-server": "11.3.0",
+    "next": "16.4.5",
+    "payload": "4.0.0-beta.7",
     "prettier": "^3.4.2",
-    "qs-esm": "7.0.2",
-    "react": "19.2.1",
-    "react-dom": "19.2.1",
+    "react": "19.3.1",
+    "react-dom": "19.3.1",
     "rimraf": "3.0.2",
-    "sharp": "0.34.2",
+    "sharp": "0.35.5",
     "sort-package-json": "^2.10.0",
-    "typescript": "5.7.3",
-    "vite-tsconfig-paths": "6.0.5",
-    "vitest": "4.0.18"
+    "typescript": "6.0.3",
+    "vite": "8.3.5",
+    "vitest": "5.1.0"
   },
   "peerDependencies": {
-    "next": "^14.0.0 || ^15.0.0 || ^16.0.0",
-    "payload": "^3.0.0",
-    "react": "^18.0.0 || ^19.0.0",
-    "sharp": ">=0.32.0"
+    "@payloadcms/transformer-sharp": "^4.0.0-beta.7",
+    "@payloadcms/ui": "^4.0.0-beta.7",
+    "next": ">=16.4.0",
+    "payload": "^4.0.0-beta.7",
+    "react": "^19.0.0",
+    "sharp": ">=0.34.0"
   },
   "engines": {
-    "node": "^18.20.2 || >=20.9.0",
-    "pnpm": "^9 || ^10"
+    "node": ">=24.22.1",
+    "pnpm": ">=9"
   },
   "publishConfig": {
     "exports": {
@@ -137,6 +147,11 @@
         "import": "./dist/exports/rsc.js",
         "types": "./dist/exports/rsc.d.ts",
         "default": "./dist/exports/rsc.js"
+      },
+      "./next": {
+        "import": "./dist/exports/next.js",
+        "types": "./dist/exports/next.d.ts",
+        "default": "./dist/exports/next.js"
       }
     },
     "main": "./dist/index.js",
@@ -144,13 +159,20 @@
   },
   "pnpm": {
     "onlyBuiltDependencies": [
-      "sharp",
+      "@swc/core",
       "esbuild",
+      "mongodb-memory-server",
+      "sharp",
       "unrs-resolver"
     ]
   },
   "registry": "https://registry.npmjs.org/",
   "dependencies": {
     "thumbhash": "^0.1.1"
+  },
+  "peerDependenciesMeta": {
+    "next": {
+      "optional": true
+    }
   }
 }

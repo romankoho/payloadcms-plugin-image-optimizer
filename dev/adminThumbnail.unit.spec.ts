@@ -36,7 +36,7 @@ describe('adminThumbnail injection', () => {
 
     expect(typeof upload.adminThumbnail).toBe('function')
 
-    const fn = upload.adminThumbnail as (args: { doc: Record<string, unknown> }) => string | null
+    const fn = upload.adminThumbnail as (args: { doc: Record<string, unknown> }) => null | string
     expect(fn({ doc: { filename: 'photo.webp' } })).toBe('/api/media/file/photo.webp')
     expect(fn({ doc: { filename: 'nested-name.webp' } })).toBe('/api/media/file/nested-name.webp')
     // Survives extension change (the v2 motivation): same function works for
@@ -52,77 +52,77 @@ describe('adminThumbnail injection', () => {
       ],
     } as any)
     const upload = (result.collections?.[0] as any).upload
-    const fn = upload.adminThumbnail as (args: { doc: Record<string, unknown> }) => string | null
+    const fn = upload.adminThumbnail as (args: { doc: Record<string, unknown> }) => null | string
     expect(fn({ doc: { filename: 'a.webp' } })).toBe('/api/media/file/a.webp')
   })
 
   test("'auto' returns null when doc.filename is missing", () => {
     const upload = runPlugin({ collections: { media: true } })
-    const fn = upload.adminThumbnail as (args: { doc: Record<string, unknown> }) => string | null
+    const fn = upload.adminThumbnail as (args: { doc: Record<string, unknown> }) => null | string
     expect(fn({ doc: {} })).toBeNull()
     expect(fn({ doc: { filename: null } })).toBeNull()
   })
 
-  test("'auto' returns the smallest-by-width size URL when doc.sizes has multiple entries", () => {
+  test("'auto' returns the smallest-by-width size URL when doc.variants has multiple entries", () => {
     const upload = runPlugin({ collections: { media: true } })
-    const fn = upload.adminThumbnail as (args: { doc: Record<string, unknown> }) => string | null
+    const fn = upload.adminThumbnail as (args: { doc: Record<string, unknown> }) => null | string
     const doc = {
       filename: 'photo.webp',
-      sizes: {
-        thumbnail: { url: '/api/media/file/photo-300x200.webp', width: 300 },
+      variants: {
         card: { url: '/api/media/file/photo-768x512.webp', width: 768 },
         tablet: { url: '/api/media/file/photo-1024x683.webp', width: 1024 },
+        thumbnail: { url: '/api/media/file/photo-300x200.webp', width: 300 },
       },
     }
     expect(fn({ doc })).toBe('/api/media/file/photo-300x200.webp')
   })
 
-  test("'auto' falls back to parent filename URL when all doc.sizes entries have missing width or url", () => {
+  test("'auto' falls back to parent filename URL when all doc.variants entries have missing width or url", () => {
     const upload = runPlugin({ collections: { media: true } })
-    const fn = upload.adminThumbnail as (args: { doc: Record<string, unknown> }) => string | null
+    const fn = upload.adminThumbnail as (args: { doc: Record<string, unknown> }) => null | string
     const doc = {
       filename: 'photo.webp',
-      sizes: {
-        thumbnail: { url: null, width: 300 },
+      variants: {
+        broken: undefined,
         card: { url: '/api/media/file/photo-768x512.webp', width: null },
         tablet: null,
-        broken: undefined,
+        thumbnail: { url: null, width: 300 },
       },
     }
     expect(fn({ doc })).toBe('/api/media/file/photo.webp')
   })
 
-  test("'auto' falls back to parent filename URL when doc.sizes is missing/undefined", () => {
+  test("'auto' falls back to parent filename URL when doc.variants is missing/undefined", () => {
     const upload = runPlugin({ collections: { media: true } })
-    const fn = upload.adminThumbnail as (args: { doc: Record<string, unknown> }) => string | null
+    const fn = upload.adminThumbnail as (args: { doc: Record<string, unknown> }) => null | string
     expect(fn({ doc: { filename: 'photo.webp' } })).toBe('/api/media/file/photo.webp')
-    expect(fn({ doc: { filename: 'photo.webp', sizes: undefined } })).toBe(
+    expect(fn({ doc: { filename: 'photo.webp', variants: undefined } })).toBe(
       '/api/media/file/photo.webp',
     )
   })
 
-  test("'auto' returns null when doc.filename is null AND sizes missing", () => {
+  test("'auto' returns null when doc.filename is null AND variants missing", () => {
     const upload = runPlugin({ collections: { media: true } })
-    const fn = upload.adminThumbnail as (args: { doc: Record<string, unknown> }) => string | null
+    const fn = upload.adminThumbnail as (args: { doc: Record<string, unknown> }) => null | string
     expect(fn({ doc: { filename: null } })).toBeNull()
-    expect(fn({ doc: { filename: null, sizes: undefined } })).toBeNull()
+    expect(fn({ doc: { filename: null, variants: undefined } })).toBeNull()
   })
 
   test('string mode passes through to Payload as a size-name reference', () => {
     const upload = runPlugin({
-      collections: { media: true },
       adminThumbnail: 'thumbnail',
+      collections: { media: true },
     })
     expect(upload.adminThumbnail).toBe('thumbnail')
   })
 
   test('function mode passes through to Payload as-is', () => {
-    const customFn = ({ doc }: { doc: { filename?: string | null } }) =>
+    const customFn = ({ doc }: { doc: { filename?: null | string } }) =>
       doc.filename ? `https://cdn.example.com/${doc.filename}` : null
 
     const upload = runPlugin({
-      collections: { media: true },
       adminThumbnail: customFn,
+      collections: { media: true },
     })
     expect(upload.adminThumbnail).toBe(customFn)
   })
@@ -138,7 +138,7 @@ describe('adminThumbnail injection', () => {
 
   test('non-override: leaves user string adminThumbnail intact even when plugin set to "auto"', () => {
     const upload = runPlugin(
-      { collections: { media: true }, adminThumbnail: 'auto' },
+      { adminThumbnail: 'auto', collections: { media: true } },
       { adminThumbnail: 'thumbnail' },
     )
     expect(upload.adminThumbnail).toBe('thumbnail')

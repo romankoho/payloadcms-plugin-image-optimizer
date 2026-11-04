@@ -3,8 +3,8 @@ import { thumbHashToDataURL } from 'thumbhash'
 import type { MediaResource } from '../types.js'
 
 export type ImageOptimizerProps = {
-  placeholder: 'blur' | 'empty'
   blurDataURL?: string
+  placeholder: 'blur' | 'empty'
   style: {
     objectPosition: string
   }
@@ -45,13 +45,13 @@ export function getImageOptimizerProps(resource: MediaResource | null | undefine
   // through to the runtime path for docs uploaded before the flag was enabled.
   const stored = resource.imageOptimizer?.blurDataURL
   if (stored) {
-    return { placeholder: 'blur', blurDataURL: stored, style: { objectPosition } }
+    return { blurDataURL: stored, placeholder: 'blur', style: { objectPosition } }
   }
 
   try {
     const bytes = Uint8Array.from(atob(thumbHash), (c) => c.charCodeAt(0))
     const blurDataURL = thumbHashToDataURL(bytes)
-    return { placeholder: 'blur', blurDataURL, style: { objectPosition } }
+    return { blurDataURL, placeholder: 'blur', style: { objectPosition } }
   } catch {
     return { placeholder: 'empty', style: { objectPosition } }
   }

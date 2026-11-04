@@ -1,10 +1,10 @@
-import type { PayloadHandler } from 'payload'
-import type { CollectionSlug, Where } from 'payload'
+import type { CollectionSlug, PayloadHandler, Where } from 'payload'
 
 import type { ResolvedImageOptimizerConfig } from '../types.js'
+
 import { waitUntil } from '../utilities/waitUntil.js'
 
-type CollectionState = { startedAt?: number; cancelledAt?: number; queued?: number }
+type CollectionState = { cancelledAt?: number; queued?: number; startedAt?: number }
 type StateCollections = Record<string, CollectionState>
 
 const GLOBAL_SLUG = 'image-optimizer-state'
@@ -39,14 +39,14 @@ const stateWriteChain = new Map<string, Promise<unknown>>()
 // with a 5s TTL means ~60% of polls hit memo, and every navigation burst
 // to the Media list collapses to a single DB round-trip.
 type StatusPayload = {
+  allowForceAll: boolean
+  cancelled: boolean
   collectionSlug: string
-  configured: true
-  total: number
   complete: number
+  configured: true
   errored: number
   pending: number
-  cancelled: boolean
-  allowForceAll: boolean
+  total: number
 }
 const STATUS_TTL_MS = 5_000
 const statusMemo = new Map<string, { data: StatusPayload; expiresAt: number; generation: number }>()
@@ -58,7 +58,7 @@ const statusGeneration = new Map<string, number>()
 
 async function getCollectionState(payload: any, slug: string): Promise<CollectionState> {
   try {
-    const state = await payload.findGlobal({ slug: GLOBAL_SLUG })
+    const state = await payload.findGlobal({ slug: GLOBAL_SLUG, overrideAccess: true })
     return (state?.collections as StateCollections)?.[slug] || {}
   } catch {
     return {}
@@ -70,13 +70,13 @@ async function setCollectionState(payload: any, slug: string, update: Partial<Co
   const next = previous.then(async () => {
     let existing: StateCollections = {}
     try {
-      const state = await payload.findGlobal({ slug: GLOBAL_SLUG })
+      const state = await payload.findGlobal({ slug: GLOBAL_SLUG, overrideAccess: true })
       existing = (state?.collections as StateCollections) || {}
     } catch {
       // Global may not exist yet
     }
     existing[slug] = { ...existing[slug], ...update }
-    await payload.updateGlobal({ slug: GLOBAL_SLUG, data: { collections: existing } })
+    await payload.updateGlobal({ slug: GLOBAL_SLUG, data: { collections: existing }, overrideAccess: true })
   })
   // Swallow downstream errors so a failed write doesn't poison later writes
   // in the chain; the caller's await still surfaces this call's own error.
@@ -95,7 +95,7 @@ export const createRegenerateHandler = (resolvedConfig: ResolvedImageOptimizerCo
       return Response.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    let body: { collectionSlug?: string; force?: boolean; docIds?: string[] }
+    let body: { collectionSlug?: string; docIds?: string[]; force?: boolean }
     try {
       body = await req.json!()
     } catch {
@@ -130,9 +130,11 @@ export const createRegenerateHandler = (resolvedConfig: ResolvedImageOptimizerCo
             // Isolated queue so host-side cron autorun can pick up regen jobs
             // (via `queue: 'image-optimizer'`) without the plugin interfering
             // with other consumers of the default queue.
+            input: { collectionSlug, docId },
             queue: IMAGE_OPTIMIZER_QUEUE,
             task: 'imageOptimizer_regenerateDocument',
-            input: { collectionSlug, docId },
+            // The endpoint already checked `req.user`; queue as trusted server work.
+            overrideAccess: true,
           }),
         ),
       )
@@ -168,11 +170,12 @@ export const createRegenerateHandler = (resolvedConfig: ResolvedImageOptimizerCo
       while (hasMore) {
         const result = await req.payload.find({
           collection: collectionSlug as CollectionSlug,
-          limit: 50,
-          page,
           depth: 0,
-          where,
+          limit: 50,
+          overrideAccess: true,
+          page,
           sort: 'createdAt',
+          where,
         })
 
         const ids = result.docs.map((doc) => String(doc.id))
@@ -192,9 +195,9 @@ export const createRegenerateHandler = (resolvedConfig: ResolvedImageOptimizerCo
 
     // Clear any previous cancellation and record the start time + batch size
     await setCollectionState(req.payload, collectionSlug, {
-      startedAt: Date.now(),
       cancelledAt: undefined,
       queued,
+      startedAt: Date.now(),
     })
 
     // Fire the job runner in bounded-parallel waves, kept alive past the
@@ -233,29 +236,30 @@ export const createRegenerateHandler = (resolvedConfig: ResolvedImageOptimizerCo
 
           try {
             const result = await req.payload.jobs.run({
-              queue: IMAGE_OPTIMIZER_QUEUE,
               limit: WAVE_SIZE,
+              overrideAccess: true,
+              queue: IMAGE_OPTIMIZER_QUEUE,
               // `sequential` intentionally omitted — parallel is the default
               // and the entire point of the wave-loop shape.
             })
             // `noJobsRemaining: true` is the authoritative end signal. We
             // don't use `remainingJobsFromQueried` because re-queues from a
             // concurrent POST would make it trail reality.
-            if (result?.noJobsRemaining) return
+            if (result?.noJobsRemaining) {return}
           } catch (err) {
             req.payload.logger.error({ err }, 'Image optimizer: wave run failed')
             return
           }
         }
         req.payload.logger.warn(
-          { collectionSlug, budgetMs: WAVE_BUDGET_MS },
+          { budgetMs: WAVE_BUDGET_MS, collectionSlug },
           'Image optimizer: wave budget exhausted — remaining jobs stay queued for autorun or next regen',
         )
       }
       waitUntil(runWaves(), req)
     }
 
-    return Response.json({ queued, collectionSlug })
+    return Response.json({ collectionSlug, queued })
   }
 
   return handler
@@ -281,14 +285,14 @@ export const createRegenerateStatusHandler = (resolvedConfig: ResolvedImageOptim
     // errors. (POST/DELETE stay 400 — they have side effects.)
     if (!resolvedConfig.collections[collectionSlug as CollectionSlug]) {
       return Response.json({
+        allowForceAll: resolvedConfig.regenerateButton.allowForceAll,
+        cancelled: false,
         collectionSlug,
-        configured: false,
-        total: 0,
         complete: 0,
+        configured: false,
         errored: 0,
         pending: 0,
-        cancelled: false,
-        allowForceAll: resolvedConfig.regenerateButton.allowForceAll,
+        total: 0,
       })
     }
 
@@ -312,20 +316,23 @@ export const createRegenerateStatusHandler = (resolvedConfig: ResolvedImageOptim
     const [total, complete, errored, collState] = await Promise.all([
       req.payload.count({
         collection: collectionSlug as CollectionSlug,
+        overrideAccess: true,
         where: { mimeType: { contains: 'image/' } },
       }),
       req.payload.count({
         collection: collectionSlug as CollectionSlug,
+        overrideAccess: true,
         where: {
-          mimeType: { contains: 'image/' },
           'imageOptimizer.status': { equals: 'complete' },
+          mimeType: { contains: 'image/' },
         },
       }),
       req.payload.count({
         collection: collectionSlug as CollectionSlug,
+        overrideAccess: true,
         where: {
-          mimeType: { contains: 'image/' },
           'imageOptimizer.status': { equals: 'error' },
+          mimeType: { contains: 'image/' },
         },
       }),
       getCollectionState(req.payload, collectionSlug),
@@ -334,14 +341,14 @@ export const createRegenerateStatusHandler = (resolvedConfig: ResolvedImageOptim
     const cancelled = !!(collState.cancelledAt && collState.startedAt && collState.cancelledAt > collState.startedAt)
 
     const payload: StatusPayload = {
+      allowForceAll: resolvedConfig.regenerateButton.allowForceAll,
+      cancelled,
       collectionSlug,
-      configured: true,
-      total: total.totalDocs,
       complete: complete.totalDocs,
+      configured: true,
       errored: errored.totalDocs,
       pending: total.totalDocs - complete.totalDocs - errored.totalDocs,
-      cancelled,
-      allowForceAll: resolvedConfig.regenerateButton.allowForceAll,
+      total: total.totalDocs,
     }
 
     // Only cache if nothing invalidated the memo while our Promise.all was

@@ -1,5 +1,6 @@
+import { sharpTransformer } from '@payloadcms/transformer-sharp';
 import { deepMergeSimple } from 'payload/shared';
-import { resolveCollectionConfig, resolveConfig } from './defaults.js';
+import { buildSharpCollectionConfig, resolveCollectionConfig, resolveConfig } from './defaults.js';
 import { createCancelHandler, createRegenerateHandler, createRegenerateStatusHandler } from './endpoints/regenerate.js';
 import { getImageOptimizerField } from './fields/imageOptimizerField.js';
 import { createBeforeChangeHook } from './hooks/beforeChange.js';
@@ -24,6 +25,7 @@ export { decodeThumbHashToDataURL, encodeImageToThumbHash } from './utilities/th
 export const imageOptimizer = (pluginOptions)=>(config)=>{
         const resolvedConfig = resolveConfig(pluginOptions);
         const targetSlugs = Object.keys(resolvedConfig.collections);
+        const sharpCollections = {};
         // Inject fields (and hooks when enabled) into targeted upload collections
         const collections = (config.collections || []).map((collection)=>{
             if (!targetSlugs.includes(collection.slug)) {
@@ -38,61 +40,40 @@ export const imageOptimizer = (pluginOptions)=>(config)=>{
                 })
             ];
             if (resolvedConfig.disabled) {
+                // Keep the user's own Sharp settings (variants!) registered so the
+                // schema doesn't change when the plugin is toggled off.
+                if (collection.upload) {
+                    sharpCollections[collection.slug] = resolveCollectionConfig(resolvedConfig, collection.slug).sharp;
+                }
                 return {
                     ...collection,
                     fields
                 };
             }
             // ──────────────────────────────────────────────────────────────────────────
-            // Config-injection: hand off resize / format conversion / metadata strip
-            // to Payload's native generateFileData() pipeline. The plugin only owns
-            // ThumbHash, status tracking, optional filename strategy, and the
+            // Config-injection. Payload 4 moved resize / format conversion / metadata
+            // strip out of `collection.upload` into `@payloadcms/transformer-sharp`.
+            // We collect the per-collection Sharp settings here and register one
+            // `sharpTransformer` for all targeted collections below. The plugin only
+            // owns ThumbHash, status tracking, optional filename strategy, and the
             // regeneration UI.
             //
-            // Non-override rule: if the user already set any of these on their
-            // collection, we leave their value intact.
+            // Non-override rule: values the user set in `collections.<slug>.sharp`
+            // (or on `collection.upload` for adminThumbnail / modifyResponseHeaders)
+            // win over the plugin's defaults.
             // ──────────────────────────────────────────────────────────────────────────
-            // Only inject upload-pipeline config when the collection actually has an
-            // upload. Targeting a non-upload collection is treated as a misconfig
-            // for everything except field/hook injection.
             const hasUploadConfig = collection.upload != null && collection.upload !== false;
             const perCollectionConfig = resolveCollectionConfig(resolvedConfig, collection.slug);
             const userUpload = typeof collection.upload === 'object' && collection.upload !== null ? collection.upload : {};
-            const targetFormat = perCollectionConfig.format;
+            if (hasUploadConfig) {
+                sharpCollections[collection.slug] = buildSharpCollectionConfig(resolvedConfig, perCollectionConfig);
+            }
             const injectedUpload = {
                 ...userUpload
             };
-            // Parent format conversion — inject when a format is configured and the
-            // user hasn't supplied their own formatOptions.
-            if (targetFormat && userUpload.formatOptions === undefined) {
-                injectedUpload.formatOptions = {
-                    format: targetFormat.format,
-                    options: {
-                        quality: targetFormat.quality
-                    }
-                };
-            }
-            // Resize parent
-            if (userUpload.resizeOptions === undefined) {
-                injectedUpload.resizeOptions = {
-                    fit: 'inside',
-                    height: perCollectionConfig.maxDimensions.height,
-                    width: perCollectionConfig.maxDimensions.width,
-                    withoutEnlargement: true
-                };
-            }
-            // Metadata policy — `metadataPolicy` (callback) takes precedence over the
-            // simple `stripMetadata` boolean. Both honor the non-override rule.
-            if (userUpload.withMetadata === undefined) {
-                if (resolvedConfig.metadataPolicy) {
-                    injectedUpload.withMetadata = resolvedConfig.metadataPolicy;
-                } else if (resolvedConfig.stripMetadata) {
-                    injectedUpload.withMetadata = false;
-                }
-            }
             // adminThumbnail — when the user hasn't already set one on the collection.
             // - 'auto' (default): function form that prefers the smallest
-            //   pre-generated size's URL from `doc.sizes` (to avoid downloading the
+            //   pre-generated variant's URL from `doc.variants` (to avoid downloading the
             //   full parent file into a ~50px list row), falling back to Payload's
             //   canonical file URL from `doc.filename`. Surviving the v2
             //   parent-extension change.
@@ -100,17 +81,17 @@ export const imageOptimizer = (pluginOptions)=>(config)=>{
             //
             // Note: Payload's `upload.staticDir` is a filesystem path, not a URL
             // prefix. The URL Payload serves files from is `/api/{slug}/file/{name}`
-            // (see the per-size `url` fields). We build that pattern here.
+            // (see the per-variant `url` fields). We build that pattern here.
             if (userUpload.adminThumbnail === undefined) {
                 const opt = resolvedConfig.adminThumbnail;
                 if (opt === 'auto') {
                     const slug = collection.slug;
                     injectedUpload.adminThumbnail = ({ doc })=>{
                         const filename = doc.filename;
-                        const sizes = doc.sizes;
-                        if (sizes) {
+                        const variants = doc.variants;
+                        if (variants) {
                             let smallest = null;
-                            for (const v of Object.values(sizes)){
+                            for (const v of Object.values(variants)){
                                 if (!v) {
                                     continue;
                                 }
@@ -168,35 +149,6 @@ export const imageOptimizer = (pluginOptions)=>(config)=>{
                         }) ?? headers;
                 }
             }
-            // Per-size format conversion — inject formatOptions on each imageSize that
-            // doesn't already have one. Payload's createImageSizes derives the size
-            // filename extension from the produced buffer's MIME type, so injecting
-            // formatOptions causes sizes to land as `.webp` automatically.
-            //
-            // TODO(generateImageName): a richer per-size custom-naming injection was
-            // descoped because Payload's `generateImageName` callback runs without
-            // access to the document `data` (no altText, no MIME type beyond what
-            // can be derived from `extension`). The user's `generateFilename`
-            // strategies (especially `seoFilename`) need that runtime context to
-            // produce meaningful names. Without it the only safe option is to derive
-            // size names from the parent's `originalName`, which Payload already does
-            // by default. Revisit if/when Payload exposes `data` to `generateImageName`.
-            if (targetFormat && Array.isArray(userUpload.imageSizes)) {
-                injectedUpload.imageSizes = userUpload.imageSizes.map((size)=>{
-                    if (size.formatOptions !== undefined) {
-                        return size;
-                    }
-                    return {
-                        ...size,
-                        formatOptions: {
-                            format: targetFormat.format,
-                            options: {
-                                quality: targetFormat.quality
-                            }
-                        }
-                    };
-                });
-            }
             return {
                 ...collection,
                 fields,
@@ -229,11 +181,22 @@ export const imageOptimizer = (pluginOptions)=>(config)=>{
                     ],
                     beforeOperation: [
                         ...collection.hooks?.beforeOperation || [],
-                        createBeforeOperationHook()
+                        createBeforeOperationHook(resolvedConfig, collection.slug)
                     ]
                 }
             };
         });
+        const upload = Object.keys(sharpCollections).length ? {
+            ...config.upload,
+            transformers: [
+                ...config.upload?.transformers ?? [],
+                sharpTransformer({
+                    slug: 'image-optimizer-sharp',
+                    ...pluginOptions.transformer,
+                    collections: sharpCollections
+                })
+            ]
+        } : config.upload;
         const i18n = {
             ...config.i18n,
             translations: deepMergeSimple(translations, config.i18n?.translations ?? {})
@@ -243,7 +206,8 @@ export const imageOptimizer = (pluginOptions)=>(config)=>{
             return {
                 ...config,
                 collections,
-                i18n
+                i18n,
+                upload
             };
         }
         return {
@@ -271,19 +235,24 @@ export const imageOptimizer = (pluginOptions)=>(config)=>{
                 ...config.globals || [],
                 {
                     slug: 'image-optimizer-state',
+                    // Plugin code accesses this with `overrideAccess: true`; over REST /
+                    // GraphQL only logged-in users may read or change it.
                     access: {
-                        read: ()=>true,
-                        update: ()=>true
+                        read: ({ req })=>Boolean(req.user),
+                        update: ({ req })=>Boolean(req.user)
                     },
                     admin: {
                         hidden: true
                     },
+                    // Internal bookkeeping: no version history or authorship fields.
+                    authorship: false,
                     fields: [
                         {
                             name: 'collections',
                             type: 'json'
                         }
-                    ]
+                    ],
+                    versions: false
                 }
             ],
             i18n,
@@ -319,7 +288,8 @@ export const imageOptimizer = (pluginOptions)=>(config)=>{
                         retries: 2
                     }
                 ]
-            }
+            },
+            upload
         };
     };
 
